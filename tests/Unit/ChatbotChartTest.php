@@ -69,7 +69,7 @@ class ChatbotChartTest extends TestCase
         ];
 
         $this->assertSame(
-            ['label' => 'DEPARTEMEN', 'nilai' => 'PERSENTASE_TURNOVER', 'satuan' => '%'],
+            ['label' => 'DEPARTEMEN', 'nilai' => 'PERSENTASE_TURNOVER', 'satuan' => '%', 'waktu' => false],
             $this->panggil('pilihKolomChart', $rows)
         );
     }
@@ -138,6 +138,61 @@ class ChatbotChartTest extends TestCase
         $this->assertSame('JAM_LEMBUR', $hasil['nilai'], 'Kolom JAM_LEMBUR harus dipilih, bukan TAHUN atau BULAN');
         $this->assertSame('NAMA_KARYAWAN', $hasil['label']);
         $this->assertSame('jam', $hasil['satuan']);
+    }
+
+    public function test_kolom_status_seragam_tidak_dipilih_sebagai_label(): void
+    {
+        // Kasus screenshot: tabel rekap 5 periode dengan kolom STATUS konstan 'Payroll calculation completed'
+        $rows = [
+            (object) ['Periode' => 'Juni 2026', 'Jumlah_Karyawan' => 3192, 'Total_Payroll' => 8281972070, 'Status' => 'Payroll calculation completed'],
+            (object) ['Periode' => 'Juli 2026', 'Jumlah_Karyawan' => 3334, 'Total_Payroll' => 8698223390, 'Status' => 'Payroll calculation completed'],
+            (object) ['Periode' => 'Agustus 2026', 'Jumlah_Karyawan' => 3505, 'Total_Payroll' => 9073286694, 'Status' => 'Payroll calculation completed'],
+            (object) ['Periode' => 'September 2026', 'Jumlah_Karyawan' => 3612, 'Total_Payroll' => 9642893966, 'Status' => 'Payroll calculation completed'],
+            (object) ['Periode' => 'Oktober 2026', 'Jumlah_Karyawan' => 3730, 'Total_Payroll' => 10212615492, 'Status' => 'Payroll calculation completed'],
+        ];
+
+        $hasil = $this->panggil('pilihKolomChart', $rows, 'analisis payroll dari bulan januari sampai desember 2026 tampilkan dalam chart');
+
+        $this->assertNotNull($hasil);
+        $this->assertSame('Periode', $hasil['label'], 'Kolom label harus Periode, bukan Status yang nilainya seragam');
+        $this->assertSame('Total_Payroll', $hasil['nilai'], 'Kolom nilai harus Total_Payroll');
+        $this->assertTrue($hasil['waktu'], 'Periode harus dikenali sebagai kolom deret waktu');
+    }
+
+    public function test_urutan_grafik_waktu_adalah_kronologis_bukan_descending_nilai(): void
+    {
+        // 5 bulan: nilai Oktober tertinggi, tapi grafik waktu harus urut Juni -> Juli -> ... -> Oktober
+        $rows = [
+            (object) ['Periode' => 'Oktober 2026', 'Total_Payroll' => 10212615492],
+            (object) ['Periode' => 'Juni 2026', 'Total_Payroll' => 8281972070],
+            (object) ['Periode' => 'September 2026', 'Total_Payroll' => 9642893966],
+            (object) ['Periode' => 'Juli 2026', 'Total_Payroll' => 8698223390],
+            (object) ['Periode' => 'Agustus 2026', 'Total_Payroll' => 9073286694],
+        ];
+
+        // Tes fungsi urutKronologis via reflection
+        $labels = ['Oktober 2026', 'Juni 2026', 'September 2026', 'Juli 2026', 'Agustus 2026'];
+        usort($labels, fn ($a, $b) => $this->panggil('urutKronologis', $a, $b));
+
+        $this->assertSame(
+            ['Juni 2026', 'Juli 2026', 'Agustus 2026', 'September 2026', 'Oktober 2026'],
+            $labels,
+            'Label waktu harus terurut kronologis dari bulan terawal ke terbaru'
+        );
+    }
+
+    public function test_grafik_kurang_dari_dua_kategori_tidak_dibuat(): void
+    {
+        $app = require dirname(__DIR__, 2) . '/bootstrap/app.php';
+        $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+        // Jika data hanya 1 baris atau hanya 1 kategori setelah difilter, tidak dibuat grafik
+        $rows = [
+            (object) ['Status' => 'Payroll calculation completed', 'Total' => 45000000],
+        ];
+
+        $png = $this->panggil('renderChartPng', $rows, 'Status', 'Total', 'Rp', 'Judul');
+        $this->assertNull($png, 'Grafik dengan kategori < 2 harus return null');
     }
 
     public function test_agregasi_label_duplikat_dalam_chart(): void

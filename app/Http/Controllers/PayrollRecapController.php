@@ -73,11 +73,7 @@ class PayrollRecapController extends Controller
     {
         $role = $this->getRole();
 
-        $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
-            ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
-            );
+        $bioUnion = $this->biodataUnik();
 
         $departmentsQuery = DB::table('payroll_run_details as prd')
             ->join('DEPT', 'DEPT.ID_DEPT', '=', 'prd.employee_dept')
@@ -111,11 +107,7 @@ class PayrollRecapController extends Controller
         $q    = trim((string) $request->get('q'));
         $dept = $request->get('dept');
 
-        $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'IS_STAFF')
-            ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'IS_STAFF')
-            );
+        $bioUnion = $this->biodataUnik();
 
         $query = DB::table('payroll_run_details as prd')
             ->leftJoinSub($bioUnion, 'bio', fn($join) => $join->on('bio.NPK', '=', 'prd.employee_npk'))
@@ -235,6 +227,52 @@ class PayrollRecapController extends Controller
         return (float) $this->evaluateFormula($formula, $variables);
     }
 
+    /**
+     * BIODATA + BIODATA_KELUAR, satu baris per NPK.
+     *
+     * Versi lama memakai unionAll apa adanya. Kalau satu NPK punya lebih dari satu
+     * baris (duplikat di BIODATA_KELUAR, atau muncul di dua tabel sekaligus), join
+     * ke payroll_run_details menggandakan baris gaji: total membengkak sedangkan
+     * jumlah karyawan (dihitung distinct NPK) tetap. Itu sebabnya /payroll/recap
+     * pernah tidak sama dengan /payroll-process/index.
+     */
+    private function biodataUnik()
+    {
+        $gabung = DB::table('BIODATA')
+            ->selectRaw('0 as sumber, NPK, NAMA_KARYAWAN, ID_DEPT, IS_STAFF')
+            ->unionAll(
+                DB::table('BIODATA_KELUAR')
+                    ->selectRaw('1 as sumber, NPK, NAMA_KARYAWAN, ID_DEPT, IS_STAFF')
+            );
+
+        $ranked = DB::query()
+            ->fromSub($gabung, 'gab')
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
+            // Data aktif (BIODATA) menang; bila tetap ada duplikat, status staff diutamakan.
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY NPK ORDER BY sumber ASC, IS_STAFF DESC) as rn');
+
+        return DB::query()
+            ->fromSub($ranked, 'bio_rank')
+            ->where('rn', 1)
+            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF');
+    }
+
+    /**
+     * PKWT terakhir per NPK (kontrak dengan TKK paling baru), satu baris per NPK.
+     * Klasifikasi aktif/keluar/mangkir tetap memakai TKK + KETERANGAN yang sama.
+     */
+    private function pkwtTerakhir()
+    {
+        $ranked = DB::table('PKWT')
+            ->select('NPK', 'TKK', 'KETERANGAN')
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY NPK ORDER BY TKK DESC) as rn');
+
+        return DB::query()
+            ->fromSub($ranked, 'pkwt_rank')
+            ->where('rn', 1)
+            ->select('NPK', 'TKK', 'KETERANGAN');
+    }
+
     public function chartData(Request $request)
     {
         $role = $this->getRole();
@@ -259,17 +297,13 @@ class PayrollRecapController extends Controller
             ? 'Total Take Home Pay'
             : $flatComponents[$component];
 
-        $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
-            ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
-            );
+        $bioUnion = $this->biodataUnik();
 
         $rowsQuery = DB::table('payroll_run_details as prd')
             ->join('payroll_runs as pr', 'prd.run_id', '=', 'pr.id')
             ->join('payroll_periods as pp', 'pr.period_id', '=', 'pp.id')
             ->leftJoinSub($bioUnion, 'bio', fn($join) => $join->on('bio.NPK', '=', 'prd.employee_npk'))
-            ->leftJoin('PKWT as pkwt', 'pkwt.NPK', '=', 'prd.employee_npk')
+            ->leftJoinSub($this->pkwtTerakhir(), 'pkwt', fn($join) => $join->on('pkwt.NPK', '=', 'prd.employee_npk'))
             ->leftJoin('DEPT as dept_main', 'dept_main.ID_DEPT', '=', 'prd.employee_dept')
             ->whereBetween('pp.start_date', [$startMonth->toDateString(), $endMonth->toDateString()])
             ->when($npk, fn($q) => $q->where('prd.employee_npk', $npk))
@@ -505,17 +539,13 @@ class PayrollRecapController extends Controller
 
     private function getClosedPayrollRows($period, ?string $role, $npk, $dept)
     {
-        $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
-            ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
-            );
+        $bioUnion = $this->biodataUnik();
 
         $rowsQuery = DB::table('payroll_run_details as prd')
             ->join('payroll_runs as pr', 'prd.run_id', '=', 'pr.id')
             ->where('pr.period_id', $period->id)
             ->leftJoinSub($bioUnion, 'bio', fn($join) => $join->on('bio.NPK', '=', 'prd.employee_npk'))
-            ->leftJoin('PKWT as pkwt', 'pkwt.NPK', '=', 'prd.employee_npk')
+            ->leftJoinSub($this->pkwtTerakhir(), 'pkwt', fn($join) => $join->on('pkwt.NPK', '=', 'prd.employee_npk'))
             ->leftJoin('DEPT as dept_main', 'dept_main.ID_DEPT', '=', 'prd.employee_dept')
             ->when($npk, fn($q) => $q->where('prd.employee_npk', $npk))
             ->when($dept, fn($q) => $q->where('prd.employee_dept', $dept));
@@ -590,11 +620,7 @@ class PayrollRecapController extends Controller
             ->get()
             ->keyBy('npk');
 
-        $bioUnion = DB::table('BIODATA')
-            ->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
-            ->unionAll(
-                DB::table('BIODATA_KELUAR')->select('NPK', 'NAMA_KARYAWAN', 'ID_DEPT', 'IS_STAFF')
-            );
+        $bioUnion = $this->biodataUnik();
 
         $holidaySet = DB::table('holidays')
             ->whereBetween('holiday_date', [$periodStart->toDateString(), $periodEnd->toDateString()])

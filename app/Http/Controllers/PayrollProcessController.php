@@ -27,6 +27,7 @@ use App\Models\InsentifRoleFormula;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use App\Services\PayrollRoleFilterService;
+use App\Services\PayrollRunTotalsService;
 use App\Models\RolePayroll;
 
 class PayrollProcessController extends Controller
@@ -1773,6 +1774,11 @@ CEK DUPLICATE BANK ACCOUNT (payroll_masters)
                         'updated_at'   => now()
                     ]);
             }
+
+            // Header run harus ikut berubah: /payroll-process/index membaca
+            // payroll_runs.total_payroll (role Payroll_ALL), sedangkan
+            // /payroll/recap menjumlah payroll_run_details.
+            PayrollRunTotalsService::sync((int) $run_id);
 
             DB::commit();
 

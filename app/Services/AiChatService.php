@@ -21,6 +21,12 @@ use RuntimeException;
 class AiChatService
 {
     /**
+     * Kolom komponen gaji pada employees_contract. Diblokir untuk pengguna
+     * tanpa role payroll, TETAPI dibuka untuk role payroll terdaftar (R33) —
+     * cakupan role adalah soal karyawan mana, bukan soal kolom.
+     */
+    protected const KOLOM_GAJI = ['salary', 'daily_salary', 'allowance', 'pph21', 'pph_21'];
+    /**
      * Pesan error terakhir saat membaca skema read-only (untuk diagnostik
      * pesan kegagalan mode RAG; null kalau tidak ada error).
      */
@@ -32,9 +38,49 @@ class AiChatService
      */
     protected ?RagRules $aturanRag = null;
 
+    /** Guard data payroll per role_payrolls (R33). */
+    protected ?PayrollAccessGuard $payrollGuard = null;
+
     protected function aturanRag(): RagRules
     {
         return $this->aturanRag ??= app(RagRules::class);
+    }
+
+    protected function payrollGuard(): PayrollAccessGuard
+    {
+        return $this->payrollGuard ??= app(PayrollAccessGuard::class);
+    }
+
+    /**
+     * Guard check yang dijalankan pada SETIAP prompt, sebelum aturan RAG
+     * disusun: identitas penanya dan role payroll-nya dibaca ulang dari DB.
+     *
+     * Dipisah jadi method supaya bisa diuji dan diganti (stub) di unit test.
+     */
+    protected function guardSesi(ChatbotSession $session): array
+    {
+        $penggunaAktif = null;
+
+        try {
+            $penggunaAktif = auth()->hasUser() ? auth()->id() : null;
+        } catch (\Throwable $e) {
+            Log::warning('Chatbot: auth() tidak tersedia saat guard check — ' . $e->getMessage());
+        }
+
+        return $this->payrollGuard()->periksaSesi($session, $penggunaAktif);
+    }
+
+    /**
+     * Ringkasan guard untuk meta respons / log. Hanya id, role, dan kode —
+     * tidak pernah memuat nama, NPK, atau isi data lain.
+     */
+    protected function ringkasGuard(array $cek): array
+    {
+        return [
+            'user_id' => $cek['user_id'] ?? null,
+            'role' => $cek['role'] ?? null,
+            'kode' => $cek['kode'] ?? null,
+        ];
     }
 
     /**
@@ -314,6 +360,62 @@ class AiChatService
             ];
         }
 
+        // GUARD CHECK WAJIB (permintaan 18 Nov 2026): sebelum aturan RAG
+        // dipakai, `users` dan `role_payrolls` dibaca ulang dari database
+        // untuk memastikan (a) sesi punya pemilik yang benar-benar ada,
+        // (b) sesi tidak dipakai akun lain, (c) role payroll yang dipakai
+        // adalah nilai terkini. Gagal verifikasi = permintaan tidak diproses.
+        $cekGuard = $this->guardSesi($session);
+
+        if (! $cekGuard['ok']) {
+            Log::warning('Chatbot: guard check menolak permintaan', [
+                'kode' => $cekGuard['kode'],
+                'user_id' => $cekGuard['user_id'],
+            ]);
+
+            return [
+                'content' => $cekGuard['pesan'],
+                'meta' => ['sql' => null, 'guard_check' => $this->ringkasGuard($cekGuard)],
+            ];
+        }
+
+        $penanya = $cekGuard['user'];
+        $rolePayroll = $cekGuard['role'];
+        $pertanyaanPayroll = $this->payrollGuard()->sensitif($userMessage);
+        $payrollBlok = '';
+
+        // Jejak audit: setiap permintaan yang lolos guard mencatat siapa,
+        // role apa, dan apakah pertanyaannya menyentuh payroll. Tanpa angka
+        // dan tanpa isi pertanyaan.
+        Log::info('Chatbot: guard check lolos', [
+            'user_id' => $penanya?->id,
+            'role' => $rolePayroll,
+            'kode' => $cekGuard['kode'],
+            'payroll' => $pertanyaanPayroll,
+        ]);
+
+        if ($pertanyaanPayroll) {
+            $penolakan = $this->payrollGuard()->pelanggaran($rolePayroll, $userMessage);
+
+            if ($penolakan !== null) {
+                Log::info('Chatbot: permintaan payroll di luar cakupan role ditolak', [
+                    'role' => $rolePayroll,
+                    'user_id' => $penanya?->id,
+                ]);
+
+                return [
+                    'content' => $penolakan,
+                    'meta' => [
+                        'sql' => null,
+                        'payroll_guard' => $this->payrollGuard()->ringkas($rolePayroll),
+                        'guard_check' => $this->ringkasGuard($cekGuard),
+                    ],
+                ];
+            }
+
+            $payrollBlok = $this->payrollGuard()->blokPrompt($rolePayroll);
+        }
+
         // KONTEKS PERCAKAPAN (permintaan 17 Nov 2026): model harus melihat
         // giliran-giliran sebelumnya di sesi ini. Tanpa ini, pertanyaan
         // lanjutan ("kenapa LINE 66 aktifnya 0?") tidak punya rujukan sama
@@ -322,7 +424,8 @@ class AiChatService
         $riwayatPesan = $this->pesanRiwayat($session);
 
         $blockedTables = $this->blockedTables();
-        $blockedColumns = $this->blockedColumns();
+        // R33: blokir kolom gaji hanya untuk penanya tanpa role payroll.
+        $blockedColumns = $this->blockedColumnsUntuk($rolePayroll);
         $schema = $this->getDatabaseSchema($blockedTables, $blockedColumns);
 
         if (empty($schema)) {
@@ -383,7 +486,7 @@ class AiChatService
 
             {$aturanTeks}
 
-            ---- akhir aturan RAG ----
+            {$payrollBlok}---- akhir aturan RAG ----
             {$riwayatBlok}
             Berikut daftar SEMUA tabel & kolom yang benar-benar ada di database ini (hasil introspeksi
             otomatis langsung dari katalog database — bukan hafalan/perkiraan), kolom yang ditandai (PK)
@@ -454,6 +557,14 @@ class AiChatService
         // dengan aman" padahal query-nya masih bisa diperbaiki.
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             $validation = $this->validateReadonlySql($sql, $blockedTables, $blockedColumns);
+
+            // R33: query payroll WAJIB memuat filter cakupan role penanya.
+            // Kalau model lupa menambahkannya, query diperlakukan sebagai
+            // tidak valid supaya masuk jalur perbaikan (bukan langsung jalan).
+            if ($validation['valid'] && $pertanyaanPayroll
+                && ! $this->payrollGuard()->sqlSesuaiCakupan($sql, $rolePayroll)) {
+                $validation = ['valid' => false, 'reason' => $this->payrollGuard()->pesanFilterHilang($rolePayroll)];
+            }
 
             if (! $validation['valid']) {
                 $alasanTerakhir = $validation['reason'];
@@ -608,6 +719,17 @@ class AiChatService
                 . 'riwayat/konteks percakapan.';
         }
 
+        // R33: penjawab juga diberi tahu cakupan payroll penanya supaya tidak
+        // menuliskan "seluruh karyawan" untuk angka yang sudah difilter.
+        if ($pertanyaanPayroll) {
+            $ringkasGuard = $this->payrollGuard()->ringkas($rolePayroll);
+            $answerSystemPrompt .= "\n\nBATAS AKSES PAYROLL (R33): penanya berrole `{$ringkasGuard['role']}`"
+                . " dengan cakupan {$ringkasGuard['cakupan']}. Data JSON di bawah SUDAH difilter ke cakupan itu."
+                . ' Jangan menuliskan "seluruh karyawan"/"semua karyawan" untuk angka yang hanya mencakup cakupan tersebut'
+                . ' — sebutkan cakupannya. Kalau user meminta data di luar cakupan, jelaskan bahwa aksesnya tidak'
+                . ' diperbolehkan dan sebutkan cakupan yang ia miliki.';
+        }
+
         $answer = $this->callProvider($providerKey, $answerSystemPrompt, array_merge($riwayatPesan, [
             ['role' => 'user', 'content' => "Pertanyaan user: {$userMessage}\n\nData JSON (maks {$maxRows} baris):\n{$rowsJson}"],
         ]));
@@ -693,10 +815,25 @@ class AiChatService
      */
     protected function blockedTables(): array
     {
-        $daftar = array_map(
-            fn($t) => strtolower(trim($t)),
-            config('chatbot.rag_blocked_tables', ['payroll_masters', 'payroll_run_details', 'payroll_run_details_audit'])
-        );
+        // Sumber UTAMA = Bagian 6c dokumen aturan (R32). Sebelumnya daftar ini
+        // hanya hidup di CHATBOT_RAG_BLOCKED_TABLES (.env), sehingga aturan
+        // yang mengikat chatbot tidak ikut terdokumentasi. Config/.env tetap
+        // dibaca sebagai lapisan TAMBAHAN kalau masih terisi.
+        try {
+            $daftar = $this->aturanRag()->blokTeknis()['tabel'];
+        } catch (\Throwable $e) {
+            Log::warning('AiChatService: blocklist Bagian 6c tidak terbaca — ' . $e->getMessage());
+            $daftar = [];
+        }
+
+        $daftar = array_merge($daftar, (array) config('chatbot.rag_blocked_tables', []));
+        $daftar = array_map(fn($t) => strtolower(trim((string) $t)), $daftar);
+
+        // Jaring pengaman: dokumen dan .env sama-sama tidak terbaca jangan
+        // sampai membuat blocklist kosong (fail-open).
+        if (empty(array_filter($daftar))) {
+            $daftar = ['payroll_masters', 'payroll_run_details', 'payroll_run_details_audit'];
+        }
 
         // R25 dokumen aturan: empat tabel audit dilarang dibaca karena
         // kebijakan data (bukan soal permission). Diambil dari dokumen
@@ -728,22 +865,82 @@ class AiChatService
      */
     protected function blockedColumns(): array
     {
+        // Sumber UTAMA = Bagian 6c dokumen aturan (R32); config/.env hanya
+        // lapisan tambahan (server lama) supaya tidak ada larangan yang hilang.
         $result = [];
 
-        foreach (config('chatbot.rag_blocked_columns', []) as $table => $columns) {
-            $table = strtolower(trim($table));
+        $gabung = function (array $sumber) use (&$result) {
+            foreach ($sumber as $table => $columns) {
+                $table = strtolower(trim((string) $table));
 
-            if ($table === '') {
-                continue;
+                if ($table === '') {
+                    continue;
+                }
+
+                $bersih = array_values(array_filter(array_map(
+                    fn($c) => strtolower(trim((string) $c)),
+                    (array) $columns
+                )));
+
+                if ($bersih === []) {
+                    continue;
+                }
+
+                $result[$table] = array_values(array_unique(array_merge($result[$table] ?? [], $bersih)));
             }
+        };
 
-            $result[$table] = array_values(array_filter(array_map(
-                fn($c) => strtolower(trim($c)),
-                (array) $columns
-            )));
+        try {
+            $gabung($this->aturanRag()->blokTeknis()['kolom']);
+        } catch (\Throwable $e) {
+            Log::warning('AiChatService: kolom terblokir Bagian 6c tidak terbaca — ' . $e->getMessage());
+        }
+
+        $gabung((array) config('chatbot.rag_blocked_columns', []));
+
+        // Jaring pengaman: kolom gaji tidak boleh lolos hanya karena dokumen
+        // dan .env sama-sama tidak terbaca.
+        if ($result === []) {
+            $result = ['employees_contract' => ['salary', 'allowance', 'daily_salary', 'pph21', 'pph_21', 'file_contract']];
         }
 
         return $result;
+    }
+
+    /**
+     * Kolom terblokir KHUSUS untuk penanya dengan role payroll tertentu (R33).
+     *
+     * Tanpa ini, blokir kolom gaji dari R32/R19 berlaku untuk semua orang —
+     * termasuk Payroll_ALL — sehingga setiap pertanyaan gaji dijawab
+     * "kolom terlarang" dan aturan role_payrolls tidak pernah terpakai.
+     * Role payroll terdaftar membuka kolom komponen gaji, tetapi:
+     *  - kolom identitas (KTP/KK/HP), token, dan berkas tetap diblokir;
+     *  - baris tetap wajib difilter ke cakupan role (sqlSesuaiCakupan()).
+     * `file_contract` sengaja TIDAK dibuka: itu path berkas, bukan komponen gaji.
+     */
+    protected function blockedColumnsUntuk(?string $rolePayroll): array
+    {
+        $kolom = $this->blockedColumns();
+
+        if (! $this->payrollGuard()->bolehLihatGaji($rolePayroll)) {
+            return $kolom;
+        }
+
+        foreach (['employees_contract', 'employee_contract'] as $tabel) {
+            if (! isset($kolom[$tabel])) {
+                continue;
+            }
+
+            $kolom[$tabel] = array_values(array_diff($kolom[$tabel], self::KOLOM_GAJI));
+
+            // Jangan tinggalkan entri kosong: susunan aturan prompt memakai
+            // daftar ini apa adanya.
+            if ($kolom[$tabel] === []) {
+                unset($kolom[$tabel]);
+            }
+        }
+
+        return $kolom;
     }
 
     /**
@@ -1962,6 +2159,25 @@ class AiChatService
             'hari', 'day', 'tgl', 'tanggal', 'date', 'scan_date', 'overtime_date',
             'awal_minggu', 'akhir_minggu', 'minggu_ke', 'week',
             'is_holiday', 'status', 'keterangan', 'remark',
+            // Penanda teknis kontrak/versi: bukan metrik. `contract_ke` pernah
+            // dipilih sebagai sumbu nilai sehingga semua batang bernilai 10
+            // ("kontrak ke-10") padahal user minta gaji.
+            'contract_ke', 'contract', 'kontrak', 'kontrak_ke', 'contract_no',
+            'seq', 'sequence', 'index', 'idx', 'row', 'level',
+        ];
+
+        // Petunjuk metrik dari pertanyaan: kolom yang menjawab pertanyaan harus
+        // menang atas kolom angka lain yang kebetulan muncul lebih dulu di
+        // hasil query (mis. contract_ke sebelum salary).
+        $petunjukMetrik = [
+            ['kata' => ['payroll', 'gaji', 'salary', 'upah', 'thp', 'take home', 'penghasilan'],
+                'kolom' => ['total_payroll', 'payroll', 'salary', 'gaji', 'upah', 'thp', 'take_home']],
+            ['kata' => ['karyawan', 'orang', 'pegawai', 'headcount', 'jumlah karyawan'],
+                'kolom' => ['employee_count', 'jumlah_karyawan', 'total_karyawan', 'karyawan_count', 'headcount']],
+            ['kata' => ['tunjangan', 'allowance'], 'kolom' => ['allowance', 'tunjangan']],
+            ['kata' => ['pph', 'pajak', 'potongan'], 'kolom' => ['pph', 'potongan', 'deduction']],
+            ['kata' => ['lembur', 'overtime'], 'kolom' => ['jam_lembur', 'lembur', 'overtime', 'total_lembur']],
+            ['kata' => ['insentif', 'bonus'], 'kolom' => ['insentif', 'bonus']],
         ];
 
         // Hitung variasi nilai unik per kolom di sampel untuk mendeteksi
@@ -1981,6 +2197,17 @@ class AiChatService
         }
 
         $pesanLower = mb_strtolower((string) $userMessage);
+
+        // Kata kunci metrik yang disebut user (gaji/tunjangan/lembur/...).
+        $prioritasNilai = [];
+        foreach ($petunjukMetrik as $p) {
+            foreach ($p['kata'] as $kata) {
+                if ($pesanLower !== '' && str_contains($pesanLower, $kata)) {
+                    $prioritasNilai = array_merge($prioritasNilai, $p['kolom']);
+                    break;
+                }
+            }
+        }
 
         foreach ($headers as $header) {
             $nama = mb_strtolower((string) $header);
@@ -2011,6 +2238,11 @@ class AiChatService
             if ($angka > $teks) {
                 // Lewati kolom non-metrik (identitas/kalender)
                 if (in_array($nama, $bukanNilai, true)) {
+                    continue;
+                }
+
+                // Lewati pola penanda teknis: *_ke, *_id, row, seq, level, dst.
+                if ($this->kolomPenandaTeknis($nama)) {
                     continue;
                 }
 
@@ -2047,6 +2279,16 @@ class AiChatService
                     $skor += 35;
                 }
 
+                // Bonus besar bila kolom ini metrik yang diminta (gaji →
+                // salary). Tanpa ini, kolom seperti contract_ke yang muncul
+                // lebih dulu menang seri dan grafik menampilkan angka salah.
+                foreach ($prioritasNilai as $kataKolom) {
+                    if (str_contains($nama, $kataKolom) || str_contains($kataKolom, $nama)) {
+                        $skor += 150;
+                        break;
+                    }
+                }
+
                 $kandidatNilai[$header] = $skor;
                 continue;
             }
@@ -2054,13 +2296,29 @@ class AiChatService
             // Kolom teks: makin beragam isinya, makin cocok jadi label.
             $skor = count($unik) + $teks;
 
-            if (str_contains($nama, 'dept') || str_contains($nama, 'departemen')
+            // Kolom teks yang nilainya konstan / seragam (hanya 1 nilai unik)
+            // dilarang keras menjadi label grafik jika jumlah baris >= 2
+            // (misal status="Payroll calculation completed" di semua baris).
+            // Memilih kolom konstan akan membuat seluruh baris teragregasi
+            // menjadi 1 batang raksasa yang statis dan tidak informatif.
+            if (count($sampel) >= 2 && count($unik) <= 1) {
+                continue;
+            }
+
+            if (str_contains($nama, 'periode') || str_contains($nama, 'period')
+                || str_contains($nama, 'bulan') || str_contains($nama, 'month')
+                || str_contains($nama, 'tahun') || str_contains($nama, 'year')
+                || str_contains($nama, 'tgl') || str_contains($nama, 'tanggal') || str_contains($nama, 'date')) {
+                $skor += 80;
+            } elseif (str_contains($nama, 'dept') || str_contains($nama, 'departemen')
                 || str_contains($nama, 'bagian') || str_contains($nama, 'section')
                 || str_contains($nama, 'divisi') || str_contains($nama, 'line')
                 || str_contains($nama, 'nama') || str_contains($nama, 'karyawan')
-                || str_contains($nama, 'status') || str_contains($nama, 'bulan')
-                || str_contains($nama, 'kategori') || str_contains($nama, 'area')) {
-                $skor += 50;
+                || str_contains($nama, 'jabatan') || str_contains($nama, 'area')) {
+                $skor += 60;
+            } elseif (str_contains($nama, 'kategori') || str_contains($nama, 'status')) {
+                // Status/kategori hanya mendapat bonus kecil bila nilainya bervariasi (> 1 unik)
+                $skor += 20;
             }
 
             $kandidatLabel[$header] = $skor;
@@ -2089,9 +2347,99 @@ class AiChatService
             $satuan = '%';
         } elseif (str_contains($namaNilai, 'jam') || str_contains($namaNilai, 'hour')) {
             $satuan = 'jam';
+        } elseif (preg_match('/salary|gaji|upah|allowance|tunjangan|pph|potongan|insentif|bonus|nominal|amount|pay|thp/', $namaNilai)) {
+            // Metrik uang: tampilkan dengan pemisah ribuan dan awalan Rp.
+            $satuan = 'Rp';
         }
 
-        return ['label' => $kolomLabel, 'nilai' => $kolomNilai, 'satuan' => $satuan];
+        return ['label' => $kolomLabel, 'nilai' => $kolomNilai, 'satuan' => $satuan, 'waktu' => $this->kolomAdalahWaktu($kolomLabel)];
+    }
+
+    /**
+     * Apakah kolom label bersifat deret waktu / kronologis?
+     * Dipakai untuk menentukan urutan grafik: data waktu harus diurutkan
+     * kronologis (naik), bukan di-sort berdasarkan nilai metrik.
+     */
+    protected function kolomAdalahWaktu(string $namaKolom): bool
+    {
+        $nama = mb_strtolower(trim($namaKolom));
+
+        return (bool) preg_match(
+            '/periode|period|bulan|month|tahun|year|tgl|tanggal|date|minggu|week|hari|day|kuartal|quarter|semester/i',
+            $nama
+        );
+    }
+
+    /**
+     * Urutkan dua label waktu secara kronologis (naik).
+     * Mengenali format umum: "Juni 2026", "2026-06", "2026-06-01", "06/2026", "Q1 2026".
+     */
+    protected function urutKronologis(string $a, string $b): int
+    {
+        return $this->kunciWaktu($a) <=> $this->kunciWaktu($b);
+    }
+
+    /**
+     * Ubah label waktu menjadi kunci numerik yang bisa dibandingkan.
+     */
+    protected function kunciWaktu(string $label): float
+    {
+        $t = mb_strtolower(trim($label));
+
+        $bulanId = [
+            'januari' => 1, 'jan' => 1, 'februari' => 2, 'feb' => 2, 'maret' => 3, 'mar' => 3,
+            'april' => 4, 'apr' => 4, 'mei' => 5, 'may' => 5, 'juni' => 6, 'jun' => 6,
+            'juli' => 7, 'jul' => 7, 'agustus' => 8, 'aug' => 8,
+            'september' => 9, 'sept' => 9, 'sep' => 9,
+            'oktober' => 10, 'okt' => 10, 'october' => 10, 'oct' => 10,
+            'november' => 11, 'nov' => 11,
+            'desember' => 12, 'december' => 12, 'des' => 12, 'dec' => 12,
+        ];
+
+        // Pola "Bulan Tahun": Juni 2026 / Oct 2026
+        foreach ($bulanId as $namaBulan => $nomor) {
+            if (preg_match('/\b' . preg_quote($namaBulan, '/') . '\b[^\d]*(\d{4})/i', $t, $m)) {
+                return ((float) $m[1]) * 100 + $nomor;
+            }
+        }
+
+        // Pola YYYY-MM atau YYYY-MM-DD
+        if (preg_match('/(\d{4})-(\d{1,2})(?:-(\d{1,2}))?/', $t, $m)) {
+            return ((float) $m[1]) * 10000 + ((float) $m[2]) * 100 + (float) ($m[3] ?? 1);
+        }
+
+        // Pola MM/YYYY atau MM-YYYY
+        if (preg_match('/(\d{1,2})\s*[\/\-]\s*(\d{4})/', $t, $m)) {
+            return ((float) $m[2]) * 100 + (float) $m[1];
+        }
+
+        // Pola Q1..Q4 YYYY
+        if (preg_match('/q([1-4])\s*(\d{4})/i', $t, $m)) {
+            return ((float) $m[2]) * 10 + (float) $m[1];
+        }
+
+        // Pola tahun penuh saja: 2026
+        if (preg_match('/(\d{4})/', $t, $m)) {
+            return (float) $m[1] * 100;
+        }
+
+        // Fallback: urut alfabetis supaya tetap deterministik.
+        return 0;
+    }
+
+    /**
+     * Kolom penanda teknis (nomor urut, versi kontrak, id, level) tidak layak
+     * jadi sumbu nilai grafik: panjang batangnya tidak mewakili besaran apa pun.
+     *
+     * Contoh nyata: `contract_ke` (kontrak ke-10) diplot sebagai "nilai",
+     * sehingga semua batang tampil 10 padahal user bertanya gaji.
+     */
+    protected function kolomPenandaTeknis(string $nama): bool
+    {
+        return (bool) preg_match(
+            '/(^|_)(ke|id|ids|no|nomor|nomer|urut|seq|sequence|row|rownum|index|idx|level|versi|version)$/',
+            $nama
+        );
     }
 
     /**
@@ -2134,12 +2482,13 @@ class AiChatService
         }
 
         $judul = $this->judulChart($kolom, $userMessage);
-        $png = $this->renderChartPng($rows, $kolom['label'], $kolom['nilai'], $kolom['satuan'], $judul);
+        $png = $this->renderChartPng($rows, $kolom['label'], $kolom['nilai'], $kolom['satuan'], $judul, $kolom['waktu'] ?? false);
 
         if ($png === null) {
-            // GD / font TTF tidak tersedia: jangan gagalkan jawaban, cukup
-            // lewati grafik (tabel & export tetap ada).
-            Log::warning('AiChatService: grafik tidak dibuat (GD/font tidak tersedia).');
+            // GD / font TTF tidak tersedia ATAU hasil agregasi hanya menyisakan
+            // 1 kategori (kolom konstan) sehingga grafik statis tidak informatif:
+            // jangan gagalkan jawaban, cukup lewati grafik (tabel & export tetap ada).
+            Log::warning('AiChatService: grafik tidak dibuat (GD/font tidak tersedia atau hanya 1 kategori).');
 
             return null;
         }
@@ -2155,7 +2504,7 @@ class AiChatService
         $dipakai = array_slice($rows, 0, max(3, (int) config('chatbot.chart_max_bars', 12)));
 
         return [
-            'type' => 'bar',
+            'type' => ($kolom['waktu'] ?? false) ? 'bar_waktu' : 'bar',
             'filename' => $filename,
             'url' => $this->urlExport($disk, $path, $filename),
             'row_count' => count($rows),
@@ -2163,6 +2512,7 @@ class AiChatService
             'label_kolom' => $kolom['label'],
             'nilai_kolom' => $kolom['nilai'],
             'satuan' => $kolom['satuan'],
+            'waktu' => (bool) ($kolom['waktu'] ?? false),
             'otomatis' => ! $diminta,
         ];
     }
@@ -2179,7 +2529,7 @@ class AiChatService
             return trim(Str::title(mb_strtolower($teks)));
         };
 
-        $metrik = $rapikan($kolom['nilai']);
+        $metrik = $this->labelManusiaKolom($kolom['nilai'], $rapikan);
         $kategori = $rapikan($kolom['label']);
 
         $judul = $metrik . ' per ' . $kategori;
@@ -2193,12 +2543,45 @@ class AiChatService
     }
 
     /**
+     * Nama kolom dalam bahasa manusia untuk judul grafik. Judul harus
+     * menyebut metrik ("Gaji per Nama Karyawan"), bukan nama kolom teknis.
+     */
+    protected function labelManusiaKolom(string $nama, callable $rapikan): string
+    {
+        $peta = [
+            'salary' => 'Gaji', 'gaji' => 'Gaji', 'daily_salary' => 'Gaji Harian',
+            'allowance' => 'Tunjangan', 'tunjangan' => 'Tunjangan',
+            'pph21' => 'PPh 21', 'pph_21' => 'PPh 21', 'pph' => 'PPh',
+            'take_home' => 'Take Home Pay', 'thp' => 'Take Home Pay',
+            'contract_ke' => 'Kontrak Ke',
+            'jumlah' => 'Jumlah', 'total' => 'Total', 'qty' => 'Jumlah', 'count' => 'Jumlah',
+            'persen' => 'Persentase', 'percent' => 'Persentase',
+        ];
+
+        $kunci = mb_strtolower(trim($nama));
+
+        if (isset($peta[$kunci])) {
+            return $peta[$kunci];
+        }
+
+        if (str_contains($kunci, '.')) {
+            $ekor = substr($kunci, strrpos($kunci, '.') + 1);
+
+            if (isset($peta[$ekor])) {
+                return $peta[$ekor];
+            }
+        }
+
+        return $rapikan($nama);
+    }
+
+    /**
      * Gambar grafik batang horizontal (PNG) memakai GD.
      * Mengembalikan null kalau GD atau font TTF tidak tersedia.
      *
      * @param  array<int, mixed>  $rows
      */
-    protected function renderChartPng(array $rows, string $kolomLabel, string $kolomNilai, string $satuan, string $judul): ?string
+    protected function renderChartPng(array $rows, string $kolomLabel, string $kolomNilai, string $satuan, string $judul, bool $labelWaktu = false): ?string
     {
         if (! function_exists('imagecreatetruecolor') || ! function_exists('imagettftext')) {
             return null;
@@ -2260,10 +2643,32 @@ class AiChatService
             $data[] = ['label' => $item['label'], 'nilai' => $item['nilai']];
         }
 
-        usort($data, fn ($a, $b) => $b['nilai'] <=> $a['nilai']);
+        // R34: grafik batang WAJIB punya minimal 2 kategori pembanding yang
+        // nilainya berbeda. Kalau hasil agregasi hanya menyisakan 1 kategori
+        // (kolom label konstan, mis. status yang sama di semua baris),
+        // JANGAN render grafik statis — kembalikan null supaya jawaban cukup
+        // tabel + ringkasan teks.
+        if (count($data) < 2) {
+            return null;
+        }
+
+        // R34: deteksi apakah label bersifat deret waktu / kronologis.
+        // Kalau kolom label mengandung periode/bulan/tanggal/tahun, urutkan
+        // KRONOLOGIS (naik), jangan di-sort descending berdasarkan nilai.
+        $labelWaktu = $labelWaktu || $this->kolomAdalahWaktu($kolomLabel);
+
+        if ($labelWaktu) {
+            usort($data, fn ($a, $b) => $this->urutKronologis($a['label'], $b['label']));
+        } else {
+            usort($data, fn ($a, $b) => $b['nilai'] <=> $a['nilai']);
+        }
 
         $maksBar = max(3, (int) config('chatbot.chart_max_bars', 12));
         $data = array_slice($data, 0, $maksBar);
+
+        // Bila data deret waktu dan semua kategori nilainya IDENTIK (mis. tren
+        // datar), tetap tampilkan — tapi urutannya tetap kronologis, bukan
+        // acak dari sort nilai.
 
         $nilaiMaks = 0.0;
         foreach ($data as $d) {
@@ -2314,7 +2719,7 @@ class AiChatService
         imagettftext($gambar, 14, 0, $padX, $padAtas + 14, $warna['judul'], $font, $judul);
 
         $subjudul = 'Sumber: hasil query Chatbot HRIS'
-            . ' | ' . $jumlahBar . ' kategori teratas'
+            . ' | ' . $jumlahBar . ($labelWaktu ? ' periode (kronologis)' : ' kategori teratas')
             . ' | dibuat ' . now()->format('d/m/Y H:i');
 
         imagettftext($gambar, 9, 0, $padX, $padAtas + 32, $warna['subjudul'], $font, $subjudul);
@@ -2356,6 +2761,8 @@ class AiChatService
             // bukan dibulatkan jadi 8% seperti sebelumnya.
             if ($satuan === '%') {
                 $teksNilai = number_format($d['nilai'], 2, ',', '.') . '%';
+            } elseif ($satuan === 'Rp') {
+                $teksNilai = 'Rp ' . number_format($d['nilai'], 0, ',', '.');
             } elseif ($d['nilai'] != floor($d['nilai'])) {
                 $teksNilai = number_format($d['nilai'], 2, ',', '.');
             } else {

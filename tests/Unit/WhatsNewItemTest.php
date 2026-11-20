@@ -87,11 +87,44 @@ class WhatsNewItemTest extends TestCase
         $this->assertStringContainsString('sort_order', $sql);
     }
 
-    public function test_scope_aktif_mengurutkan_sort_order_lalu_id(): void
+    public function test_scope_aktif_mengurutkan_terbaru_dulu(): void
     {
         $sql = (new WhatsNewItem())->newQuery()->aktif()->toSql();
 
-        $this->assertMatchesRegularExpression('/order by .*sort_order.*id/i', $sql);
+        // Nilai urut terbesar = terbaru = tampil lebih dulu di modal.
+        $this->assertMatchesRegularExpression(
+            '/order by .*sort_order.*desc.*id.*desc/i',
+            $sql
+        );
+    }
+
+    public function test_modal_menampilkan_banner_terbaru_paling_depan(): void
+    {
+        // Urutan masuk sengaja diacak: hasil akhir harus terbaru dulu.
+        $daftar = collect([
+            $this->item(['sort_order' => 2, 'id' => 7,  'title' => 'B']),
+            $this->item(['sort_order' => 9, 'id' => 4,  'title' => 'C']),
+            $this->item(['sort_order' => 1, 'id' => 30, 'title' => 'A']),
+            $this->item(['sort_order' => 9, 'id' => 12, 'title' => 'D']),
+        ]);
+
+        $hasil = \App\Support\WhatsNew::urutkan($daftar);
+
+        $this->assertSame(['D', 'C', 'B', 'A'], $hasil->pluck('title')->all());
+        $this->assertSame([12, 4, 7, 30], $hasil->pluck('id')->all());
+    }
+
+    public function test_urutan_modal_tidak_berubah_bila_sort_order_sama_dan_id_sama(): void
+    {
+        $daftar = collect([
+            $this->item(['sort_order' => 5, 'id' => 3, 'title' => 'Lama', 'updated_at' => now()->subDay()]),
+            $this->item(['sort_order' => 5, 'id' => 3, 'title' => 'Baru', 'updated_at' => now()]),
+        ]);
+
+        $hasil = \App\Support\WhatsNew::urutkan($daftar);
+
+        // updated_at terbaru menang bila sort_order dan id sama.
+        $this->assertSame('Baru', $hasil->first()->title);
     }
 
     // --------------------------------------------------------------- media
@@ -340,5 +373,137 @@ class WhatsNewItemTest extends TestCase
         ]);
 
         $this->assertSame([], $errors);
+    }
+
+    // ------------------------------------------------- QR & akses video
+
+    public function test_punya_video_benar_untuk_semua_jenis_video(): void
+    {
+        $berkas = $this->item(['media_type' => 'video', 'media_path' => 'whats-new/demo.mp4']);
+        $url    = $this->item(['media_type' => 'video', 'media_url' => 'https://cdn.chutex.id/demo.webm']);
+        $yt     = $this->item(['media_type' => 'video', 'media_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ']);
+
+        $this->assertTrue($berkas->punyaVideo());
+        $this->assertTrue($url->punyaVideo());
+        $this->assertTrue($yt->punyaVideo());
+    }
+
+    public function test_punya_video_salah_untuk_gambar_dan_tanpa_media(): void
+    {
+        $gambar = $this->item(['media_type' => 'image', 'media_path' => 'whats-new/banner.jpg']);
+        $kosong = $this->item(['media_type' => 'none']);
+
+        $this->assertFalse($gambar->punyaVideo());
+        $this->assertFalse($kosong->punyaVideo());
+    }
+
+    /**
+     * Inti permintaan: video hanya boleh diakses selama banner aktif DAN
+     * berada di dalam periode tayang.
+     */
+    public function test_sedang_aktif_mempertimbangkan_status_dan_periode(): void
+    {
+        $aktif = $this->item([
+            'media_type' => 'video',
+            'media_path' => 'whats-new/demo.mp4',
+            'is_active'  => true,
+            'starts_at'  => now()->subDay(),
+            'ends_at'    => now()->addDay(),
+        ]);
+
+        $nonaktif = $this->item([
+            'media_type' => 'video',
+            'media_path' => 'whats-new/demo.mp4',
+            'is_active'  => false,
+        ]);
+
+        $belumMulai = $this->item([
+            'media_type' => 'video',
+            'media_path' => 'whats-new/demo.mp4',
+            'is_active'  => true,
+            'starts_at'  => now()->addDay(),
+        ]);
+
+        $sudahLewat = $this->item([
+            'media_type' => 'video',
+            'media_path' => 'whats-new/demo.mp4',
+            'is_active'  => true,
+            'ends_at'    => now()->subDay(),
+        ]);
+
+        $tanpaPeriode = $this->item([
+            'media_type' => 'video',
+            'media_path' => 'whats-new/demo.mp4',
+            'is_active'  => true,
+        ]);
+
+        $this->assertTrue($aktif->sedangAktif());
+        $this->assertTrue($tanpaPeriode->sedangAktif());
+        $this->assertFalse($nonaktif->sedangAktif());
+        $this->assertFalse($belumMulai->sedangAktif());
+        $this->assertFalse($sudahLewat->sedangAktif());
+    }
+
+    public function test_url_tonton_mengarah_ke_halaman_publik(): void
+    {
+        $this->daftarkanRute('whats-new/tonton/{id}', 'whats-new.watch');
+
+        $item = $this->item(['id' => 17, 'media_type' => 'video', 'media_path' => 'whats-new/demo.mp4']);
+        $item->exists = true;
+
+        $url = (string) $item->urlTonton();
+
+        $this->assertStringContainsString('/whats-new/tonton/17', $url);
+    }
+
+    public function test_url_tonton_null_untuk_banner_tanpa_video(): void
+    {
+        $item = $this->item(['id' => 18, 'media_type' => 'image', 'media_path' => 'whats-new/banner.jpg']);
+        $item->exists = true;
+
+        $this->assertNull($item->urlTonton());
+    }
+
+    public function test_rute_qr_dan_tonton_terdaftar_di_router(): void
+    {
+        $this->assertTrue(Route::has('whats-new.watch'));
+        $this->assertTrue(Route::has('admin.whats-new.qr'));
+    }
+
+    /** Tiga cabang keputusan akses video: 200 / 403 / 404. */
+    public function test_status_tonton_menolak_banner_nonaktif_dengan_403(): void
+    {
+        [$kode, $alasan] = WhatsNewController::statusTonton($this->item([
+            'media_type' => 'video',
+            'media_path' => 'whats-new/demo.mp4',
+            'is_active'  => false,
+        ]));
+
+        $this->assertSame(403, $kode);
+        $this->assertStringContainsString('dinonaktifkan', (string) $alasan);
+    }
+
+    public function test_status_tonton_menolak_banner_tanpa_video_dengan_404(): void
+    {
+        [$kode, $alasan] = WhatsNewController::statusTonton($this->item([
+            'media_type' => 'image',
+            'media_path' => 'whats-new/banner.jpg',
+            'is_active'  => true,
+        ]));
+
+        $this->assertSame(404, $kode);
+        $this->assertStringContainsString('tidak memiliki video', (string) $alasan);
+    }
+
+    public function test_status_tonton_mengizinkan_banner_aktif(): void
+    {
+        [$kode, $alasan] = WhatsNewController::statusTonton($this->item([
+            'media_type' => 'video',
+            'media_path' => 'whats-new/demo.mp4',
+            'is_active'  => true,
+        ]));
+
+        $this->assertSame(200, $kode);
+        $this->assertNull($alasan);
     }
 }

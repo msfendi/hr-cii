@@ -6,9 +6,11 @@
 
 | Atribut | Nilai |
 |---|---|
-| Versi dokumen | 1.2 — dibuat 16 November 2026, diperbarui 17 November 2026 |
+| Versi dokumen | 1.4 — dibuat 16 November 2026, diperbarui 19 November 2026 |
 | Perubahan 1.1 | Resep kehadiran berbasis roster shift (R24) menggantikan MIN/MAX tap; tabel audit dilarang dipakai (R25) |
 | Perubahan 1.2 | Batas maksimal lembur (R31): 4 jam/hari dan 18 jam/minggu untuk hari kerja; lembur pada istirahat Sabtu/Minggu dan/atau hari libur resmi tidak dihitung |
+| Perubahan 1.3 | Blocklist tabel/kolom pindah ke dokumen ini (R32 + Bagian 6c, tidak lagi dari `.env`); guard data payroll per `role_payrolls` (R33) |
+| Perubahan 1.4 | R34 diperluas: grafik wajib dinamis mengikuti dimensi query (periode/waktu, departemen, jenis kelamin, jabatan), larangan grafik 1 batang statis, pemilihan tipe chart yang adaptif (garis/tren vs batang perbandingan vs proporsi), larangan memplot kolom status konstan sebagai kategori |
 | Sumber skema | dump `CII.sql` (Navicat, 12 Nov 2026 15:30) dari server `MSCHUTEX` |
 | Verifikasi nilai | koneksi read-only langsung ke database CII, 16 Nov 2026 |
 | Versi SQL Server | 12.0.6024.0 (SQL Server 2014) |
@@ -39,8 +41,11 @@
 - Riwayat percakapan sesi WAJIB dipakai untuk pertanyaan lanjutan (R26) — jangan menjawab "tidak punya konteks".
 - Turnover = **keluar ÷ aktif × 100** (R27); `AKTIF = 0` → tampil `-`, bukan `0.00`.
 - Line: **LINE 1–42 = Factory 2**, **LINE 43–84 = Factory 1**, non-line = "Lainnya" (R28). Top N = agregasi per unit (R29).
+- Blocklist tabel/kolom untuk chatbot ada di **Bagian 6c** dokumen ini (R32) — bukan lagi di `.env`.
+- Pertanyaan **payroll/gaji/kompensasi/pinalty** wajib dicek dulu ke **`role_payrolls.payroll_role`**; di luar cakupan role → **tolak** dan sebutkan cakupannya (R33).
+- Visualisasi/grafik wajib mengikuti dimensi query nyata (waktu/kategori) dan jenis data; dilarang grafik 1 batang statis / kolom status seragam; gaya disesuaikan: tren = garis/vertikal urut waktu, perbandingan = bar ranking, komposisi = donut/pie (R34).
 
-## 1. ATURAN WAJIB (R1–R31)
+## 1. ATURAN WAJIB (R1–R33)
 
 Aturan berikut bersifat mengikat. Bila satu aturan bertentangan dengan kebiasaan umum SQL,
 **aturan di dokumen ini yang menang**, karena disusun dari data nyata database CII.
@@ -263,6 +268,131 @@ Aturan berikut bersifat mengikat. Bila satu aturan bertentangan dengan kebiasaan
 - Saat melaporkan pelanggaran, tampilkan **NPK, tanggal/minggu, jam hari itu, jam minggu itu, dan selisih terhadap batas**. Jangan menyimpulkan sanksi, potongan, atau tindakan disiplin — itu di luar lingkup RAG.
 - Kalau pengguna hanya bertanya "berapa lembur X", **jangan** langsung menilai patuh/tidak patuh; tampilkan jamnya, lalu sebutkan batas R31 sebagai konteks bila relevan.
 
+### R32. Blocklist tabel & kolom ditetapkan di **Bagian 6c** dokumen ini, bukan di `.env`.
+
+**Kenapa:** Sebelumnya daftar larangan hidup di `CHATBOT_RAG_BLOCKED_TABLES` / `CHATBOT_RAG_BLOCKED_COLUMNS` (`.env`). Akibatnya aturan yang mengikat chatbot bisa berbeda antar server tanpa jejak di dokumen, tidak ikut teraudit saat aturan diperbarui, dan tidak terbaca oleh model karena hanya ditegakkan di kode.
+
+**Yang harus dilakukan:**
+- **Sumber tunggal = Bagian 6c.** Sistem membaca baris `TABEL:` dan `KOLOM:` di bagian itu setiap kali menyusun prompt, lalu memakai daftar tersebut untuk (a) menghapus tabel/kolom dari skema yang dikirim ke AI, (b) menolak query yang menyebutnya, dan (c) menolak `SELECT *` pada tabel yang punya kolom terblokir.
+- Tabel pada baris `TABEL:` **tidak boleh muncul** di query dengan cara apa pun, termasuk lewat JOIN atau subquery.
+- Kolom pada baris `KOLOM:` (format `tabel:kolom1,kolom2`) **tidak tersedia**: jangan disebut, diminta, atau ditebak namanya lain. Kalau pertanyaan hanya bisa dijawab lewat kolom itu, balas `NO_QUERY` (atau tawarkan padanan yang tidak sensitif).
+- Menambah/mengurangi larangan = **edit Bagian 6c**, naikkan versi dokumen, lalu commit. Jangan menaruh larangan baru di `.env`.
+- Variabel `.env` masih dibaca sebagai **lapisan tambahan** bila masih terisi (agar server lama tidak kehilangan larangan sebelum dipindah), tetapi **bukan lagi sumber kebenaran**. Setelah pindah, kosongkan.
+- Kalau Bagian 6c tidak terbaca, sistem memakai daftar cadangan yang sama dan menulis peringatan ke log — **bukan** berarti semua tabel boleh dibaca.
+
+### R33. Guard data payroll: cek `role_payrolls` lebih dulu, tolak di luar cakupan, rekap ulang sesuai cakupan.
+
+**Kenapa:** Data payroll/gaji/kompensasi bersifat sensitif dan kewenangannya tidak sama untuk semua user. Role payroll menentukan **siapa** (staff atau non staff) dan **sektor mana** (sewing atau non sewing) yang boleh dibuka. Tanpa guard, user `Payroll_SEWING` bisa memperoleh gaji staff/expat hanya dengan memintanya lewat chat.
+
+**Definisi pertanyaan sensitif:** menyebut (dalam bahasa Indonesia atau Inggris) gaji, upah, payroll, salary, kompensasi/compensation, pinalty/penalti/penalty, THR, tunjangan, potongan, slip gaji, insentif, PPh 21, atau BPJS **dalam konteks per orang/per komponen**, bukan sekadar absensi atau headcount.
+
+**Langkah wajib (urutannya tidak boleh dibalik):**
+1. Ambil role penanya dari **`role_payrolls.payroll_role`** (`role_payrolls.user_id = users.id`). **Jangan** menyimpulkan role dari nama role Spatie, dari isi pertanyaan, atau dari asumsi.
+2. Cocokkan dengan cakupan di bawah.
+3. Bila permintaan **di luar cakupan** → **tolak sejak awal**: jangan menyusun query, jangan menampilkan angka, jangan memberi total, jangan memberi petunjuk yang mengarah ke angka tersebut. Sampaikan bahwa ia tidak diperbolehkan dan sebutkan cakupannya.
+4. Bila **di dalam cakupan** → filter cakupan **wajib ada di SQL** (`IS_STAFF`, dan `DEPT.IS_SEWING` untuk role sewing/non sewing). Untuk rekap payroll, hitung ulang per komponen hanya atas baris dalam cakupan — jangan pernah menampilkan total gabungan seluruh perusahaan.
+
+| `payroll_role` | Cakupan yang boleh dibuka | Filter wajib di SQL |
+|---|---|---|
+| `Payroll_STAFF` | Staff & expat saja | `BIODATA.IS_STAFF = '1' OR BIODATA.IS_EXPAT = '1'` |
+| `Payroll_NONSTAFF` | Seluruh non staff (sewing + non sewing) | `BIODATA.IS_STAFF = '0'` |
+| `Payroll_SEWING` | Non staff **sewing** saja | `BIODATA.IS_STAFF = '0' AND DEPT.IS_SEWING = '0'` |
+| `Payroll_NONSEWING` | Non staff **non sewing** saja | `BIODATA.IS_STAFF = '0' AND DEPT.IS_SEWING = '1'` |
+| `Payroll_ALL` | Semua (staff, expat, non staff, sewing, non sewing) | tidak ada filter cakupan |
+| tidak terdaftar (`NULL`) atau nilai lain | **tidak boleh apa pun** (deny by default) | — |
+
+**Aturan teknis:**
+- Join sektor: `BIODATA.ID_DEPT = DEPT.ID_DEPT`, lalu pakai `DEPT.IS_SEWING`. Jangan memakai `DEPT.SECTION` (selalu 'CHUTEX') dan jangan menebak sektor dari nama departemen.
+- `IS_STAFF`, `IS_EXPAT`, `IS_SEWING` disimpan sebagai **teks** `'0'`/`'1'` (R14) → bandingkan dengan literal teks, atau `TRY_CAST(... AS int)` di kedua sisi. Jangan mencampur `int` dan `varchar`.
+- Role `Payroll_ALL` **hanya** membuka cakupan data; larangan tabel pada R25 dan tabel payroll agregat pada Bagian 6c **tetap berlaku**.
+- Kolom komponen gaji pada `employees_contract` (`salary`, `daily_salary`, `allowance`, `pph21`, `pph_21`) **dibuka hanya untuk role payroll terdaftar** (R33.1). Penanya tanpa role tetap ditolak, dan `file_contract` (path berkas) tetap tertutup untuk semua role. Kolom identitas `PKWT.KTP`, `PKWT.NO_KK`, `PKWT.HP`, serta `leave_requests.token` **tidak pernah** dibuka oleh role payroll mana pun.
+- Menolak bukan berarti "data tidak ada": kalimatnya harus jelas bahwa **aksesnya** yang tidak diperbolehkan, lalu sebutkan cakupan role tersebut. Contoh: "Anda tidak diperbolehkan melihat gaji staff/expat. Role payroll Anda `Payroll_SEWING` hanya mencakup non staff sewing."
+- Bila user meminta rekap gabungan (mis. "total gaji semua karyawan"), jawab bahwa angkanya hanya bisa diberikan untuk cakupannya, lalu tampilkan rekap cakupannya saja.
+
+### R33.1. Guard check wajib pada SETIAP prompt: baca ulang `users` dan `role_payrolls` sebelum aturan RAG dipakai.
+
+**Kenapa:** Role payroll yang dibaca dari relasi sesi bisa basi (role dicabut/diubah setelah sesi dibuat), dan sesi chat bisa dipakai akun lain bila hanya mengandalkan `user_id` di tabel sesi. Tanpa pembacaan ulang, guard R33 bisa lolos dengan data lama — itulah jalan kebocoran.
+
+**Urutan wajib (dijalankan sebelum skema diintrospeksi dan sebelum model AI dipanggil):**
+1. Sesi wajib punya `user_id`. Sesi tanpa pemilik → **tolak seluruh permintaan**.
+2. Bila ada pengguna login, `users.id` pengguna login **wajib sama** dengan `chatbot_sessions.user_id`. Berbeda → **tolak seluruh permintaan** (sesi milik akun lain).
+3. Baca ulang `users` dari database berdasarkan `user_id` sesi. Baris tidak ada atau tabel tidak terbaca → **tolak seluruh permintaan**.
+4. Baca ulang `role_payrolls.payroll_role` untuk user tersebut. Gagal baca **bukan** alasan membuka akses: role dianggap kosong sehingga data gaji tetap tertutup.
+5. Nilai `payroll_role` yang tidak ada di tabel cakupan R33 → dianggap tidak terdaftar (deny by default), dicatat di log.
+6. Setiap keputusan guard dicatat ke log: `user_id`, role, kode keputusan, dan apakah pertanyaannya menyentuh payroll. **Tanpa** isi pertanyaan dan tanpa angka.
+
+**Yang dilarang:** memakai `$session->user`/relasi ter-cache sebagai sumber identitas; melewati guard untuk pertanyaan yang "kelihatannya bukan payroll" (guard identitas tetap jalan untuk semua pertanyaan); menampilkan nama/NPK penanya di log guard.
+
+### R34. GRAFIK WAJIB DARI KOLOM HASIL QUERY YANG NYATA & SESUAI STYLE/DIMENSI DATA.
+
+**Kenapa:** grafik yang tidak berasal dari kolom hasil query menyesatkan, dan grafik yang gayanya
+statis di setiap turn (selalu batang horizontal satu batang yang sama) membingungkan pengguna.
+Pernah terjadi:
+1. User minta gaji, tabel menampilkan `salary`, tetapi grafik memplot `contract_ke` sehingga
+   semua batang bernilai sama (10) — angka itu artinya "kontrak ke-10", bukan gaji.
+2. User menanyakan rekap payroll 5 periode (Juni–Oktober 2026). Tabel menampilkan tren 5 periode,
+   ringkasan menulis kenaikan +23,3%, tetapi grafik di bawahnya justru menampilkan
+   **satu batang horizontal statis**: label `"Payroll calculation completed"`, nilai `"17.373"`,
+   judul `"Employee Count per Status"`. Kolom `status` bernilai seragam `"Payroll calculation completed"`
+   di semua baris sehingga diagregasi menjadi 1 kategori tunggal, sementara sumbu waktu yang
+   seharusnya menjadi pembeda (`Periode` / `start_date`) diabaikan.
+
+**Aturan visualisasi dan pemilihan kolom:**
+1. **Sumbu nilai (metrik):**
+   - Wajib berasal dari kolom angka yang relevan dengan pertanyaan: `salary`, `total_payroll`,
+     `total_salary`, `overtime_pay`, `jumlah_jam_lembur`, `employee_count`, `count(*)`.
+   - **Dilarang** memplot kolom penanda teknis: `contract_ke`, `*_ke`, `id`, `npk`, `nik`, `no`,
+     `nomor`, `urut`, `seq`, `row`, `index`, `tahun`, `bulan`, `hari`, `is_*`, `level`.
+   - **Dilarang** mengarang atau memakai angka default/pengganti bila kolom metrik tidak tersedia.
+     Bila tidak ada kolom metrik yang sah: **jangan buat grafik**, cukup tabel Markdown.
+
+2. **Sumbu kategori (label) dan pemilihan dimensi:**
+   - **Dilarang** memilih kolom kategori yang bernilai konstan/seragam di seluruh baris hasil query
+     (misalnya `status = 'Payroll calculation completed'` di semua baris, `is_closed = 1` di semua baris).
+     Mengagregasi kolom konstan menghasilkan grafik 1 batang yang tidak informatif.
+   - Pilihlah dimensi yang memiliki variasi nyata dan menjawab pertanyaan:
+     * Data berkala/tren (rekap bulanan/tahunan/mingguan) → gunakan kolom waktu (`periode`, `start_date`,
+       `bulan`, `tahun`, `tanggal`).
+     * Data perbandingan entitas → gunakan `departemen`, `bagian`, `line`, `jabatan`, `jenis_kelamin`,
+       atau `nama_karyawan`.
+     * Data status/kategori → hanya bila statusnya bervariasi (misal status cuti: `approved` vs `rejected`,
+       status karyawan: `aktif` vs `keluar` vs `mangkir`).
+
+3. **Larangan grafik statis / 1 kategori:**
+   - Grafik batang **wajib memiliki minimal 2 kategori pembanding** yang nilainya berbeda.
+   - Jika setelah diagregasi hanya tersisa 1 kategori (misalnya 1 batang raksasa), sistem
+     **dilarang merender grafik** karena tidak ada perbandingan data yang bisa disajikan. Cukup
+     sajikan angka dalam ringkasan teks atau kartu metrik.
+
+4. **Penyesuaian gaya (style) grafik dengan karakteristik data real:**
+   Tidak semua data harus memakai satu jenis grafik batang horizontal yang kaku:
+   - **Tren Waktu / Historis** (misal perkembangan payroll Juni–Oktober, tren lembur bulanan, tren
+     kehadiran harian):
+     * Gaya yang sesuai: grafik garis (*line/trend chart*) atau grafik batang vertikal berurutan
+       kronologis dari kiri ke kanan.
+     * Label sumbu X diurutkan secara kronologis berdasarkan waktu (`Juni 2026` → `Juli 2026` → ... → `Oktober 2026`),
+       bukan di-sort descending berdasarkan nilai metrik terbesar.
+   - **Perbandingan Antar-Kategori / Top N** (misal 5 Departemen Lembur Tertinggi, Gaji per Karyawan):
+     * Gaya yang sesuai: grafik batang (*bar chart*) horizontal atau vertikal dengan urutan ranking
+       tertinggi ke terendah (*descending*).
+   - **Komposisi / Proporsi Bagian terhadap Total** (misal persentase Karyawan Aktif vs Keluar vs Mangkir,
+     atau komposisi departemen Sewing vs Non-Sewing):
+     * Gaya yang sesuai: diagram lingkaran/donat (*donut/pie chart*) atau batang bertumpuk (*stacked bar*),
+       bukan batang horizontal lepas yang tidak memperlihatkan proporsi 100%.
+
+5. **Konsistensi nilai grafik vs tabel:**
+   - Angka pada grafik **harus sama persis** dengan baris tabel yang ditampilkan pada jawaban yang sama.
+   - Satuan uang diformat dengan awalan `Rp` dan pemisah ribuan titik (`Rp 10.212.615.492`).
+   - Satuan kuantitas orang diformat angka bulat (`3.730 orang`), persentase dua desimal (`23,30%`),
+     durasi dengan satuan (`jam`).
+   - Judul grafik wajib menyebut metrik dan dimensinya secara jelas (contoh:
+     `Total Payroll per Periode (Juni - Oktober 2026)`, bukan `Employee Count per Status`).
+
+6. **Verifikasi:**
+   - Sebelum menyimpulkan grafik sudah benar, periksa bahwa grafik dinamis mengikuti giliran/turn chat
+     yang sedang berlangsung (tidak menampilkan gambar/agregat dari query sebelumnya), jumlah batang/titik
+     cocok dengan jumlah baris yang relevan di tabel, dan label kategori mencerminkan pembeda utama data.
+
 ## 2. PETA KEPUTUSAN: PERTANYAAN → TABEL → KOLOM → JOIN
 
 Gunakan tabel ini untuk memilih tabel. Kolom join di sini sudah diverifikasi.
@@ -289,6 +419,7 @@ Kalau pertanyaan tidak ada di daftar, cari tabelnya di Bagian 5 berdasarkan doma
 | Efisiensi line/QC | `line_efficiencies`, `qc_efficiencies`, `pad_efficiencies`, `cutting_efficiencies`, `heat_efficiencies` | rentang tanggal + line | `employee_*_assignments` untuk penempatan karyawan | Lima tabel berbeda; pilih sesuai jenis efisiensi. |
 | Pelanggaran karyawan | `employee_violations`, `sewing_violations`, `qc_violations` | `period_id`/`tanggal` | `employee_violations.NPK = BIODATA.NPK` | `employee_violations` per periode; `sewing_violations` per tanggal. |
 | Ekspatriat & masa berlaku izin | `expat_master`, `expat_documents`, `epos`, `chu_family` | `visa_expiry`/`kitas_expiry`/`rptka_expiry` | `expat_documents` via ID ekspatriat | Banyak yang dibatasi permission. |
+| Rekap tren payroll per bulan/periode | `payroll_runs` + `payroll_periods` | rentang tahun/bulan `payroll_periods.start_date` | `payroll_runs.period_id = payroll_periods.id` | Wajib SELECT `payroll_periods.name AS PERIODE`, `payroll_runs.total_payroll`, `payroll_runs.employee_count` urut `start_date ASC`. Jangan kelompokkan per status/1 baris. Resep 7. |
 
 ### 2.1 RESEP 1 — Daftar karyawan keluar (paling sering ditanyakan)
 
@@ -690,6 +821,33 @@ bukan 0%. Sebutkan `employee_mutations` kalau perlu memastikan ada perpindahan.
 | `TOP 10` diambil dari baris LINE mentah lalu disebut "top 10 departemen" | level agregasi salah; pengguna mempertanyakan dasarnya | agregasi per departemen/factory dulu, baru `TOP 10` (R29) |
 | Menjawab "saya tidak punya riwayat/konteks" pada pertanyaan lanjutan | mengulang pekerjaan user; jawaban tidak nyambung | pakai riwayat + query terakhir (R26) |
 | Menyebut QC/PACKING/IRONING sebagai "Factory 1/2" | departemen non-line bukan bagian dari line | `Lainnya` (R28) |
+| Mengelompokkan rekap payroll bulanan hanya berdasarkan `status` atau konstanta 1 baris | menghasilkan grafik statis 1 batang `Payroll calculation completed` | kelompokkan per `payroll_periods.name` / waktu kronologis (R34, Resep 7) |
+| Menampilkan grafik batang ranking yang di-sort acak/descending untuk data deret waktu | tren kronologis terbalik (Oktober muncul di atas Juni) | urutkan kronologis `start_date ASC` untuk tren waktu (R34) |
+
+### 2.8 RESEP 7 — Rekap Tren Payroll per Bulan / Periode (R34)
+
+Pertanyaan seperti *"analisis payroll dari bulan januari sampai desember 2026"* atau *"tren payroll per bulan"*
+wajib menampilkan data per periode/bulan, bukan dirangkum menjadi 1 baris status.
+
+```sql
+SELECT
+    pp.name AS PERIODE,
+    pp.start_date AS TANGGAL_MULAI,
+    pp.end_date AS TANGGAL_SELESAI,
+    pr.employee_count AS JUMLAH_KARYAWAN,
+    pr.total_payroll AS TOTAL_PAYROLL,
+    pr.status AS STATUS
+FROM dbo.payroll_runs pr
+JOIN dbo.payroll_periods pp ON pp.id = pr.period_id
+WHERE pp.start_date >= '2026-01-01'
+  AND pp.end_date <= '2026-12-31'
+ORDER BY pp.start_date ASC;
+```
+
+**Panduan visualisasi (R34):**
+- Karena data berbentuk **deret waktu (tren bulanan)**, sumbu kategori **wajib** memakai `PERIODE` (atau `TANGGAL_MULAI`), **bukan** `STATUS`.
+- Urutan data harus **kronologis (Januari → Desember / Juni → Oktober)**, bukan di-sort descending berdasarkan nilai nominal tertinggi.
+- Kolom metrik yang diplot adalah `TOTAL_PAYROLL` (atau `JUMLAH_KARYAWAN`), bukan `STATUS`.
 
 ## 3. KAMUS NILAI (arti kode yang tersimpan)
 
@@ -4661,6 +4819,38 @@ apakah akun read-only bisa membacanya. Larangan ini kebijakan data, bukan soal p
 
 Kalau pengguna secara eksplisit meminta data dari tabel ini, jawab bahwa tabel audit dilarang dipakai dan
 tawarkan angka dari tabel induk.
+
+### 6c. BLOCKLIST TEKNIS CHATBOT (dibaca otomatis oleh sistem — R32)
+
+Bagian ini **dibaca mesin**, bukan hanya dibaca model. `RagRules` mengambil baris `TABEL:` dan `KOLOM:`
+di dalam blok di bawah setiap kali prompt disusun, lalu daftarnya dipakai untuk tiga hal: tabel/kolom
+dihapus dari skema yang dikirim ke AI, query yang menyebutnya ditolak, dan `SELECT *` pada tabel yang
+punya kolom terblokir otomatis ditolak.
+
+Cara mengubah: edit blok di bawah → naikkan versi dokumen → commit. **Jangan** memakai `.env` lagi
+(`CHATBOT_RAG_BLOCKED_TABLES` / `CHATBOT_RAG_BLOCKED_COLUMNS` hanya dibaca sebagai lapisan tambahan
+kalau masih terisi).
+
+Nama tabel/kolom **harus sama persis** dengan Bagian 5. Kalau salah nama, larangannya tidak berefek dan
+tidak ada peringatan — contoh nyata: dulu `.env` menulis `employee_contract` (tanpa "s"), padahal tabel
+yang ada adalah `employees_contract`, sehingga kolom gaji tidak pernah benar-benar terblokir.
+
+```blokir-teknis
+KOLOM: leave_requests:token
+KOLOM: whatsapp_devices:token
+KOLOM: users:password,email,remember_token,two_factor_secret
+```
+
+Catatan penerapan:
+- Blokir teknis **hanya** menyangkut kredensial/token. Kolom gaji (`salary`, `allowance`,
+  `daily_salary`, `pph21`) **tidak lagi diblokir di tingkat teknis** karena aksesnya diatur R33
+  (cakupan baris per `role_payrolls`) dan R19 (penyamaran identitas saat ditampilkan).
+- Akibatnya `employees_contract` boleh dibaca apa adanya, termasuk saat `SELECT *`; yang menjaga
+  gaji tetap hanya keluar untuk role berhak adalah guard R33 + R33.1, bukan blocklist kolom.
+- Tabel audit `att_log_audit`, `AUDIT`, `overtimes_payroll_audit`, `payroll_run_details_audit` tetap
+  dilarang oleh R25 (Bagian 6b) dan otomatis ikut blocklist runtime.
+- Kolom token/password tetap diblokir mutlak: tidak ada role yang boleh membacanya, karena nilainya
+  bisa dipakai membajak sesi/akun, bukan sekadar data pribadi.
 
 ## 7. BATASAN TEKNIS SQL SERVER 2014
 

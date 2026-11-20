@@ -80,7 +80,18 @@
                 </div>
             </div>
             <div class="chat-header-right">
-                <span class="badge-ai">AI Powered</span>
+                @php
+                    $labelRole = $rolePayroll ? (array_key_exists($rolePayroll, \App\Models\RolePayroll::ROLES) ? \App\Models\RolePayroll::ROLES[$rolePayroll] : '-') : null;
+                @endphp
+                <div class="chat-user-badge {{ $rolePayroll ? 'is-ok' : 'is-warn' }}"
+                    title="{{ $rolePayroll
+                        ? 'Role payroll dari tabel role_payrolls: ' . $rolePayroll . ' (' . $labelRole . ')'
+                        : 'Belum ada baris di role_payrolls — pertanyaan gaji/payroll akan ditolak sistem' }}">
+                    <i class="fas {{ $rolePayroll ? 'fa-user-shield' : 'fa-user-slash' }}"></i>
+                    <span class="cub-nama">{{ $penanya->name ?? '-' }}</span>
+                    <span class="cub-npk">NPK {{ $penanya->npk ?? '-' }}</span>
+                    <span class="cub-role">{{ $rolePayroll ? $labelRole . ' · ' . $rolePayroll : 'Tanpa role payroll' }}</span>
+                </div>
                 <a href="{{ url('/') }}" class="btn-back-home" title="Kembali ke Beranda">
                     <i class="fas fa-arrow-left"></i>
                     <span>Kembali ke Beranda</span>
@@ -159,9 +170,13 @@
                                             Grafik gagal dimuat di browser. Klik <strong>Unduh PNG</strong> untuk membuka gambarnya.
                                         </p>
                                         <figcaption>
-                                            <i class="fas fa-chart-simple"></i>
+                                            <i class="fas {{ ! empty($ch['waktu']) ? 'fa-chart-line' : 'fa-chart-simple' }}"></i>
                                             <span>
-                                                Grafik batang &middot; {{ $ch['bar_count'] ?? 0 }} kategori
+                                                @if (! empty($ch['waktu']))
+                                                    Grafik batang kronologis &middot; {{ $ch['bar_count'] ?? 0 }} periode
+                                                @else
+                                                    Grafik batang &middot; {{ $ch['bar_count'] ?? 0 }} kategori
+                                                @endif
                                                 @if (! empty($ch['otomatis'])) &middot; dibuat otomatis @endif
                                             </span>
                                             <a href="{{ $ch['url'] }}" target="_blank" rel="noopener" class="message-chart-download">
@@ -467,6 +482,58 @@ body {
     font-weight: 600;
     border: 1px solid #bfdbfe;
     white-space: nowrap;
+}
+
+/* Identitas penanya + role payroll (menggantikan badge "AI Powered") */
+.chat-user-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.chat-user-badge.is-ok {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #a7f3d0;
+}
+
+.chat-user-badge.is-warn {
+    background: #fef2f2;
+    color: #b91c1c;
+    border-color: #fecaca;
+}
+
+.chat-user-badge .cub-nama {
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-user-badge .cub-npk {
+    font-weight: 500;
+    opacity: .85;
+}
+
+.chat-user-badge .cub-role {
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .78);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+@media (max-width: 820px) {
+    .chat-user-badge .cub-npk {
+        display: none;
+    }
 }
 
 /* Tombol kembali di header — inline, bukan fixed */
@@ -1033,7 +1100,11 @@ body {
         let chartHtml = '';
         if (meta && meta.chart && meta.chart.url) {
             const ch = meta.chart;
-            const ket = `Grafik batang · ${ch.bar_count ?? 0} kategori${ch.otomatis ? ' · dibuat otomatis' : ''}`;
+            const iconKet = ch.waktu ? 'fa-chart-line' : 'fa-chart-simple';
+            const labelKet = ch.waktu
+                ? `Grafik batang kronologis · ${ch.bar_count ?? 0} periode`
+                : `Grafik batang · ${ch.bar_count ?? 0} kategori`;
+            const ket = `${labelKet}${ch.otomatis ? ' · dibuat otomatis' : ''}`;
             chartHtml = `<figure class="message-chart">
                 <button type="button" class="message-chart-zoom" data-chart-zoom
                         data-chart-src="${escHtml(ch.url)}"
@@ -1044,7 +1115,7 @@ body {
                 </button>
                 <p class="message-chart-gagal"><i class="fas fa-triangle-exclamation"></i> Grafik gagal dimuat di browser. Klik <strong>Unduh PNG</strong> untuk membuka gambarnya.</p>
                 <figcaption>
-                    <i class="fas fa-chart-simple"></i>
+                    <i class="fas ${iconKet}"></i>
                     <span>${escHtml(ket)}</span>
                     <a href="${escHtml(ch.url)}" target="_blank" rel="noopener" class="message-chart-download"><i class="fas fa-download"></i> Unduh PNG</a>
                 </figcaption>

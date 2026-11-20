@@ -106,7 +106,7 @@
             <label class="font-weight-bold">Urutan tampil</label>
             <input type="number" name="sort_order" min="0" max="999" class="form-control"
                    value="{{ old('sort_order', $item->sort_order ?? 0) }}">
-            <small class="text-muted">Angka kecil tampil lebih dulu.</small>
+            <small class="text-muted">Angka lebih besar = lebih baru, tampil lebih dulu di modal.</small>
         </div>
 
         <div class="form-row">

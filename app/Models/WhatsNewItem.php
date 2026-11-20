@@ -42,7 +42,12 @@ class WhatsNewItem extends Model
 
     /**
      * Banner yang boleh tampil sekarang: aktif + sudah masuk periode +
-     * belum lewat periode. Urutan kecil tampil lebih dulu.
+     * belum lewat periode.
+     *
+     * Urutan modal: nilai urut TERBESAR dianggap paling baru dan tampil lebih
+     * dulu, karena banner baru otomatis mendapat sort_order terbesar
+     * (lihat WhatsNewController::create()). Bila nilainya sama, id terbesar
+     * menang sehingga banner yang lebih baru tetap di depan.
      */
     public function scopeAktif($query)
     {
@@ -56,8 +61,8 @@ class WhatsNewItem extends Model
             ->where(function ($q) use ($sekarang) {
                 $q->whereNull('ends_at')->orWhere('ends_at', '>=', $sekarang);
             })
-            ->orderBy('sort_order')
-            ->orderBy('id');
+            ->orderByDesc('sort_order')
+            ->orderByDesc('id');
     }
 
     /**
@@ -85,6 +90,55 @@ class WhatsNewItem extends Model
         }
 
         return 'none';
+    }
+
+    /**
+     * Apakah banner ini memuat media video (berkas unggahan maupun tautan).
+     *
+     * Dipakai menu admin untuk memutuskan tombol QR ditampilkan: QR hanya
+     * bermakna bila ada video yang bisa ditonton.
+     */
+    public function punyaVideo(): bool
+    {
+        return in_array($this->jenisMedia(), ['video', 'video-url', 'youtube', 'embed'], true);
+    }
+
+    /**
+     * Apakah banner sedang tayang sekarang: status aktif DAN berada di dalam
+     * periode tayang.
+     *
+     * Berbeda dari scopeAktif() yang membangun query, method ini menguji satu
+     * model yang sudah dimuat. Dipakai untuk menjaga akses video: begitu
+     * banner dinonaktifkan atau periodenya lewat, video tidak boleh dibuka
+     * lagi lewat QR maupun URL langsung.
+     */
+    public function sedangAktif(): bool
+    {
+        if (! $this->is_active) {
+            return false;
+        }
+
+        $sekarang = now();
+
+        if ($this->starts_at && $this->starts_at->greaterThan($sekarang)) {
+            return false;
+        }
+
+        if ($this->ends_at && $this->ends_at->lessThan($sekarang)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /** URL halaman tonton video (target QR code). */
+    public function urlTonton(): ?string
+    {
+        if (! $this->punyaVideo() || ! $this->exists) {
+            return null;
+        }
+
+        return route('whats-new.watch', ['id' => $this->getKey()]);
     }
 
     /** URL media siap pakai (berkas unggahan atau URL eksternal). */

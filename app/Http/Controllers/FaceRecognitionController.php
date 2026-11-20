@@ -20,7 +20,10 @@ class FaceRecognitionController extends Controller
 
         $faces = EmployeeFace::query()
             ->with(['registeredBy'])
+            // Terbaru lebih dulu; id sebagai penentu urutan bila updated_at sama
+            // (mis. beberapa wajah disimpan pada detik yang sama).
             ->latest('updated_at')
+            ->latest('id')
             ->get();
 
         $users = User::query()
@@ -200,6 +203,39 @@ class FaceRecognitionController extends Controller
 
         Alert::success('Berhasil', 'Data wajah ' . $npk . ' berhasil dihapus.');
         return back();
+    }
+
+    /**
+     * Sajikan foto wajah satu karyawan.
+     *
+     * Foto disimpan sebagai data URI base64 di kolom face_img. Menempelkannya
+     * langsung ke HTML tabel berarti halaman mengangkut seluruh foto sekaligus
+     * (ratusan baris x puluhan KB). Karena itu tabel hanya memuat tombol, dan
+     * foto baru benar-benar diambil lewat endpoint ini saat modal preview
+     * dibuka.
+     */
+    public function photo(EmployeeFace $employeeFace)
+    {
+        $data = (string) $employeeFace->face_img;
+
+        if ($data === '' || ! preg_match('/^data:image\/(png|jpe?g|webp|gif);base64,(.+)$/is', $data, $cocok)) {
+            abort(404);
+        }
+
+        $biner = base64_decode(preg_replace('/\s+/', '', $cocok[2]), true);
+
+        if ($biner === false || $biner === '') {
+            abort(404);
+        }
+
+        $mime = strtolower($cocok[1]) === 'jpg' ? 'image/jpeg' : 'image/' . strtolower($cocok[1]);
+
+        return response($biner, 200, [
+            'Content-Type'   => $mime,
+            'Content-Length' => (string) strlen($biner),
+            // private: foto biometrik tidak boleh tersimpan di cache bersama.
+            'Cache-Control'  => 'private, max-age=600',
+        ]);
     }
 
     /**

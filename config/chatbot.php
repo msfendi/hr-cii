@@ -152,7 +152,11 @@ return [
 
     // Batas karakter blok aturan yang dikirim ke prompt (bagian inti +
     // baris peta keputusan yang relevan). Bukan batas panjang berkas.
-    'rag_rules_max_chars' => (int) env('CHATBOT_RAG_RULES_MAX_CHARS', 24000),
+    // 18 Nov 2026: 24.000 -> 64.000. Pada 24.000 prompt sudah 23.911
+    // karakter (sisa 89) sehingga aturan berikutnya terpotong diam-diam
+    // dan Bagian 6c tidak kebagian tempat. 64.000 cukup untuk inti aturan
+    // + peta keputusan + Bagian 6/6c/7/8 sekaligus (±18 ribu token).
+    'rag_rules_max_chars' => (int) env('CHATBOT_RAG_RULES_MAX_CHARS', 64000),
 
     // R25 melarang empat tabel audit. Kalau true, daftar itu otomatis
     // ditambahkan ke blocklist runtime (selain CHATBOT_RAG_BLOCKED_TABLES).
@@ -210,7 +214,10 @@ return [
     */
     'rag_blocked_tables' => array_filter(array_map(
         'trim',
-        explode(',', env('CHATBOT_RAG_BLOCKED_TABLES', 'payroll_masters,payroll_run_details,payroll_run_details_audit'))
+        // Satu sumber: blok ```blokir-teknis``` di docs/RAG_RULES_CII.md (R32).
+        // Default dikosongkan 18 Nov 2026 supaya tabel payroll tidak lagi
+        // diblokir diam-diam dari config.
+        explode(',', env('CHATBOT_RAG_BLOCKED_TABLES', ''))
     )),
 
     /*
@@ -238,7 +245,7 @@ return [
     |
     */
     'rag_blocked_columns' => (function () {
-        $raw = env('CHATBOT_RAG_BLOCKED_COLUMNS', 'employees_contract:salary,allowance,daily_salary,pph21,pph_21,file_contract;leave_requests:token;whatsapp_devices:token');
+        $raw = env('CHATBOT_RAG_BLOCKED_COLUMNS', '');
         $result = [];
 
         foreach (array_filter(array_map('trim', explode(';', $raw))) as $group) {

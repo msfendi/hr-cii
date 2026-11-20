@@ -171,6 +171,22 @@ class ChatbotConversationContextTest extends TestCase
                 return [];
             }
 
+            /** Guard check di-stub: test ini menguji riwayat percakapan, bukan DB identitas. */
+            protected function guardSesi(ChatbotSession $session): array
+            {
+                $user = new \App\Models\User();
+                $user->id = 1;
+
+                return [
+                    'ok' => true,
+                    'kode' => 'role_kosong',
+                    'pesan' => '',
+                    'user' => $user,
+                    'role' => null,
+                    'user_id' => 1,
+                ];
+            }
+
             protected function blockedColumns(): array
             {
                 return [];

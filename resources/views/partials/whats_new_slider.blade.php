@@ -285,11 +285,15 @@ $modal = $mode === 'modal';
     .wn--modal .wn-tutup { width: 34px; height: 34px; }
     body.wn-terkunci { overflow: hidden; }
 
-    /* Floating button pembuka modal */
+    /* Floating button pembuka modal.
+       Posisi: kanan bawah, TEPAT DI ATAS tombol AI Assistant (yang memakai
+       right:22px; bottom:22px; tinggi ±58px). Bila AI Assistant tidak hadir
+       (mis. halaman login), skrip di bawah menambahkan .wn-fab-sendiri agar
+       tombol turun ke dasar layar dan tidak menyisakan ruang kosong. */
     .wn-fab {
         position: fixed;
-        left: 22px;
-        bottom: 22px;
+        right: 22px;
+        bottom: 92px;
         z-index: 1040;
         display: inline-flex;
         align-items: center;
@@ -307,6 +311,7 @@ $modal = $mode === 'modal';
         cursor: pointer;
         transition: transform .16s ease, box-shadow .16s ease;
     }
+    .wn-fab.wn-fab-sendiri { bottom: 22px; }
     .wn-fab:hover, .wn-fab:focus-visible {
         transform: translateY(-2px);
         box-shadow: 0 16px 36px rgba(15, 37, 87, .42);
@@ -322,7 +327,8 @@ $modal = $mode === 'modal';
     }
     .wn-fab-tanda[hidden] { display: none; }
     @media (max-width: 640px) {
-        .wn-fab { left: 14px; bottom: 14px; padding: 11px; }
+        .wn-fab { right: 14px; bottom: 84px; padding: 11px; }
+        .wn-fab.wn-fab-sendiri { bottom: 14px; }
         .wn-fab-teks { display: none; }
         .wn--modal { max-height: 94vh; }
     }
@@ -395,6 +401,24 @@ $modal = $mode === 'modal';
         var overlay = document.getElementById('wn-overlay');
         var fab = document.getElementById('wn-fab');
         var fabTanda = document.getElementById('wn-fab-tanda');
+
+        /* Floating button menumpang di atas tombol AI Assistant. Bila tombol itu
+           tidak dirender (halaman login, atau chatbot), turunkan ke dasar layar
+           supaya tidak ada celah kosong menggantung. Dicek setelah DOM siap:
+           partial AI Assistant bisa saja dirender setelah partial ini. */
+        function aturPosisiFab() {
+            if (!fab) { return; }
+            if (!document.getElementById('v2-ai-fab')) {
+                fab.classList.add('wn-fab-sendiri');
+            } else {
+                fab.classList.remove('wn-fab-sendiri');
+            }
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', aturPosisiFab);
+        } else {
+            aturPosisiFab();
+        }
         var track = document.getElementById('wn-track');
         var viewport = document.getElementById('wn-viewport');
         var posisi = document.getElementById('wn-posisi');

@@ -130,6 +130,7 @@ use App\Http\Controllers\SalaryApproveController;
 use App\Http\Controllers\SpeechController;
 use App\Http\Controllers\QcInsentifMasterController;
 use App\Http\Controllers\MonitoringRekonLockController;
+use App\Http\Controllers\WageRevisionController;
 use App\Http\Controllers\LineJumperInsentifMasterController;
 
 /*
@@ -298,6 +299,26 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/user/signature/{id}',       [UserController::class, 'signatureShow'])->name('user.signature.show')->middleware(['auth', 'permission']);
     Route::post('/user/signature/{id}',      [UserController::class, 'signatureStore'])->name('user.signature.store')->middleware(['auth', 'permission']);
     Route::get('/user/signature-files',      [UserController::class, 'signatureFiles'])->name('user.signature.files')->middleware(['auth', 'permission']);
+
+    // Penyesuaian Upah (UMR) — penyesuaian upah tahunan
+    Route::get('/wage-revisions/index', [WageRevisionController::class, 'index'])->name('wage-revisions.index')->middleware(['auth', 'permission']);
+    Route::post('/wage-revisions/store', [WageRevisionController::class, 'store'])->name('wage-revisions.store')->middleware(['auth', 'permission']);
+    Route::get('/wage-revisions/show/{batch}', [WageRevisionController::class, 'show'])->name('wage-revisions.show')->middleware(['auth', 'permission']);
+    Route::post('/wage-revisions/generate/{batch}', [WageRevisionController::class, 'generate'])->name('wage-revisions.generate')->middleware(['auth', 'permission']);
+    Route::post('/wage-revisions/staff/{batch}', [WageRevisionController::class, 'staff'])->name('wage-revisions.staff')->middleware(['auth', 'permission']);
+    Route::post('/wage-revisions/import/{batch}', [WageRevisionController::class, 'import'])->name('wage-revisions.import')->middleware(['auth', 'permission']);
+    Route::get('/wage-revisions/template/{batch}', [WageRevisionController::class, 'template'])->name('wage-revisions.template')->middleware(['auth', 'permission']);
+    Route::get('/wage-revisions/export/{batch}', [WageRevisionController::class, 'export'])->name('wage-revisions.export')->middleware(['auth', 'permission']);
+    Route::post('/wage-revisions/approve/{batch}', [WageRevisionController::class, 'approve'])->name('wage-revisions.approve')->middleware(['auth', 'permission']);
+    Route::post('/wage-revisions/apply/{batch}', [WageRevisionController::class, 'apply'])->name('wage-revisions.apply')->middleware(['auth', 'permission']);
+    Route::post('/wage-revisions/rollback/{batch}', [WageRevisionController::class, 'rollback'])->name('wage-revisions.rollback')->middleware(['auth', 'permission']);
+    Route::post('/wage-revisions/unlock/{batch}', [WageRevisionController::class, 'unlock'])->name('wage-revisions.unlock')->middleware(['auth', 'permission']);
+    // Hapus = aksi merusak: WAJIB POST + spoof DELETE, bukan GET. Dengan GET,
+    // satu klik (atau prefetch/crawler) bisa menghapus data tanpa dialog bila
+    // JS konfirmasi gagal dimuat. Dengan POST, kegagalan JS berakhir 405 —
+    // gagal aman, data tetap utuh.
+    Route::delete('/wage-revisions/item/delete/{batch}/{item}', [WageRevisionController::class, 'destroyItem'])->name('wage-revisions.item.delete')->middleware(['auth', 'permission']);
+    Route::delete('/wage-revisions/delete/{batch}', [WageRevisionController::class, 'destroy'])->name('wage-revisions.destroy')->middleware(['auth', 'permission']);
 
     // Payroll Component
     Route::get('/payroll-components/index', [PayrollComponentController::class, 'index'])->name('payroll-components.index')->middleware(['auth', 'permission']);
@@ -1168,6 +1189,7 @@ Route::group(['middleware' => 'auth'], function () {
                 Route::post('/identify', [FaceRecognitionController::class, 'identify'])->name('identify');
                 Route::get('/lookup', [FaceRecognitionController::class, 'lookup'])->name('lookup');
                 Route::patch('/{employeeFace}/toggle', [FaceRecognitionController::class, 'toggle'])->name('toggle');
+                Route::get('/{employeeFace}/photo', [FaceRecognitionController::class, 'photo'])->name('photo');
                 Route::match(['get', 'post', 'patch'], '/can-login/{employeeFace?}', [FaceRecognitionController::class, 'canLogin'])->name('can-login');
                 Route::delete('/{employeeFace}', [FaceRecognitionController::class, 'destroy'])->name('destroy');
             });
@@ -1370,12 +1392,19 @@ Route::get('/whats-new/media/{berkas}', [WhatsNewController::class, 'media'])
     ->where('berkas', '[A-Za-z0-9_\-\.]+')
     ->name('whats-new.media');
 
+// Target QR code di menu What's New. Publik (tanpa auth) karena dipindai
+// karyawan dari ponsel; akses video dijaga oleh status banner di controller.
+Route::get('/whats-new/tonton/{id}', [WhatsNewController::class, 'watch'])
+    ->whereNumber('id')
+    ->name('whats-new.watch');
+
 Route::prefix('admin/whats-new')->name('admin.whats-new.')
     ->middleware(['auth', 'permission'])->group(function () {
         Route::get('/', [WhatsNewController::class, 'index'])->name('index');
         Route::get('/create', [WhatsNewController::class, 'create'])->name('create');
         Route::post('/', [WhatsNewController::class, 'store'])->name('store');
         Route::get('/{id}/edit', [WhatsNewController::class, 'edit'])->whereNumber('id')->name('edit');
+        Route::get('/{id}/qr', [WhatsNewController::class, 'qr'])->whereNumber('id')->name('qr');
         Route::put('/{id}', [WhatsNewController::class, 'update'])->whereNumber('id')->name('update');
         Route::delete('/{id}', [WhatsNewController::class, 'destroy'])->whereNumber('id')->name('destroy');
         Route::post('/{id}/toggle', [WhatsNewController::class, 'toggle'])->whereNumber('id')->name('toggle');

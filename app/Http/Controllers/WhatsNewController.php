@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Validator;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 /**
  * Admin What's New — CRUD banner slider untuk HRIS v1 dan v2.
@@ -133,6 +134,82 @@ class WhatsNewController extends Controller
     }
 
     /**
+     * Halaman tonton video — target QR code di menu What's New.
+     *
+     * Sengaja TIDAK memakai middleware auth: QR dipindai karyawan lewat ponsel
+     * yang belum tentu sudah login. Yang menjaga akses adalah status banner:
+     * begitu banner dinonaktifkan atau periodenya lewat, halaman ini menolak
+     * dengan 403 dan video tidak bisa diputar lagi.
+     */
+    public function watch($id)
+    {
+        $item = WhatsNewItem::findOrFail($id);
+
+        [$kode, $alasan] = self::statusTonton($item);
+
+        if ($kode !== 200) {
+            return response()->view('whats_new.watch', [
+                'item'   => $item,
+                'boleh'  => false,
+                'alasan' => $alasan,
+            ], $kode);
+        }
+
+        return response()->view('whats_new.watch', [
+            'item'   => $item,
+            'boleh'  => true,
+            'alasan' => null,
+        ]);
+    }
+
+    /**
+     * Putuskan boleh-tidaknya sebuah banner video ditonton.
+     *
+     * Dipisah dari watch() supaya bisa diuji tanpa database: keluarannya
+     * pasangan [kode HTTP, alasan penolakan].
+     *
+     * @return array{0:int,1:?string}
+     */
+    public static function statusTonton(WhatsNewItem $item): array
+    {
+        if (! $item->punyaVideo()) {
+            return [404, 'Banner ini tidak memiliki video.'];
+        }
+
+        if (! $item->sedangAktif()) {
+            return [403, 'Banner ini sudah dinonaktifkan atau periodenya sudah berakhir, sehingga videonya tidak dapat diakses lagi.'];
+        }
+
+        return [200, null];
+    }
+
+    /**
+     * QR code (SVG) yang mengarah ke halaman tonton video banner.
+     *
+     * Dibuat saat tombol QR diklik, bukan disimpan, supaya isinya selalu
+     * mengikuti URL aplikasi yang berlaku.
+     */
+    public function qr($id)
+    {
+        $item = WhatsNewItem::findOrFail($id);
+
+        abort_unless($item->punyaVideo(), 404);
+
+        $url = route('whats-new.watch', ['id' => $item->getKey()]);
+
+        $svg = QrCode::format('svg')
+            ->size(420)
+            ->margin(1)
+            ->errorCorrection('H')
+            ->generate($url);
+
+        return response($svg, 200, [
+            'Content-Type'  => 'image/svg+xml; charset=UTF-8',
+            'Cache-Control' => 'no-store, max-age=0',
+        ]);
+    }
+
+    /**
      * Sajikan berkas media banner. Dipakai karena proyek ini tidak memakai
      * symlink public/storage, sehingga berkas di storage/app/public tidak
      * otomatis bisa diakses dari browser.
@@ -147,6 +224,20 @@ class WhatsNewController extends Controller
 
         if (! Storage::disk('public')->exists($path)) {
             abort(404);
+        }
+
+        // Video milik banner yang dinonaktifkan / di luar periode tidak boleh
+        // lagi diunduh lewat URL langsung, meski tautannya masih tersimpan di
+        // perangkat pengguna. Pemeriksaan hanya untuk berkas video supaya
+        // gambar tidak menambah satu query per permintaan.
+        $ekstensi = strtolower((string) pathinfo($berkas, PATHINFO_EXTENSION));
+
+        if (in_array($ekstensi, ['mp4', 'webm', 'ogg', 'mov'], true)) {
+            $pemilik = WhatsNewItem::where('media_path', $path)->first();
+
+            if ($pemilik && ! $pemilik->sedangAktif()) {
+                abort(403, 'Video tidak tersedia karena banner sudah dinonaktifkan.');
+            }
         }
 
         return response()->file(Storage::disk('public')->path($path), [

@@ -215,16 +215,28 @@ class RagRules
         $rujukan = (string) ($dok['bagian']['6'] ?? '');
 
         if ($rujukan !== '' && $sisa > 400) {
-            $potongan = mb_substr($rujukan, 0, $sisa - 80);
-            // Potong di batas baris supaya prompt tidak berakhir di tengah kalimat.
-            $akhirBaris = strrpos($potongan, "\n");
+            $batas = $sisa - 80;
+            $terpotong = mb_strlen($rujukan) > $batas;
+            $potongan = $terpotong ? mb_substr($rujukan, 0, $batas) : $rujukan;
 
-            if ($akhirBaris !== false) {
-                $potongan = substr($potongan, 0, $akhirBaris);
+            if ($terpotong) {
+                // Potong di batas baris supaya prompt tidak berakhir di tengah kalimat.
+                $akhirBaris = strrpos($potongan, "\n");
+
+                if ($akhirBaris !== false) {
+                    $potongan = substr($potongan, 0, $akhirBaris);
+                }
             }
 
-            $blok .= "\n\n" . $potongan
-                . "\n[... Bagian 6 dipotong; larangan tetap berlaku, lihat dokumen asli ...]";
+            $blok .= "\n\n" . $potongan;
+
+            // Penanda HANYA kalau benar-benar dipotong. Sebelumnya penanda
+            // selalu ditulis, sehingga prompt mengaku "Bagian 6 dipotong"
+            // padahal seluruh rujukan masuk — model lalu mengira daftar
+            // tabelnya tidak lengkap dan menebak nama tabel.
+            if ($terpotong) {
+                $blok .= "\n[... Bagian 6 dipotong; larangan tetap berlaku, lihat dokumen asli ...]";
+            }
         }
 
         return $blok;
@@ -304,6 +316,91 @@ class RagRules
         $kata = array_filter($kata, fn($k) => mb_strlen($k) >= 3 && ! in_array($k, $stop, true));
 
         return array_values(array_unique($kata));
+    }
+
+    /**
+     * Blocklist teknis dari Bagian 6c dokumen (R32): tabel yang dilarang
+     * total dan kolom sensitif per tabel. Ini SUMBER UTAMA blocklist mode
+     * RAG — sebelumnya daftar ini hanya hidup di .env
+     * (CHATBOT_RAG_BLOCKED_TABLES / CHATBOT_RAG_BLOCKED_COLUMNS) sehingga
+     * aturan tidak ikut terdokumentasi dan bisa berbeda antar server.
+     *
+     * Format yang dibaca, satu baris satu entri, di dalam blok ```blokir-teknis:
+     *   TABEL: payroll_masters, payroll_run_details
+     *   KOLOM: employees_contract:salary,allowance
+     *
+     * Kalau bagian itu tidak terbaca atau kosong, dipakai daftar cadangan
+     * yang sama (fail-safe: larangan tetap jalan, bukan berarti semua boleh).
+     *
+     * @return array{tabel:array<int,string>,kolom:array<string,array<int,string>>}
+     */
+    public function blokTeknis(): array
+    {
+        $cadangan = [
+            // Hanya kredensial/token (R32 versi 18 Nov 2026). Kolom gaji tidak
+            // lagi diblokir teknis — aksesnya dijaga cakupan role (R33).
+            'tabel' => [],
+            'kolom' => [
+                'leave_requests' => ['token'],
+                'whatsapp_devices' => ['token'],
+                'users' => ['password', 'email', 'remember_token', 'two_factor_secret'],
+            ],
+        ];
+
+        try {
+            $bagian = $this->bagian('6');
+        } catch (\Throwable $e) {
+            Log::warning('RagRules: gagal membaca Bagian 6c (blocklist teknis) — memakai daftar cadangan: ' . $e->getMessage());
+
+            return $cadangan;
+        }
+
+        $pos = mb_strpos($bagian, '6c.');
+
+        if ($bagian === '' || $pos === false) {
+            Log::warning('RagRules: Bagian 6c tidak ditemukan di dokumen aturan — memakai daftar cadangan blocklist.');
+
+            return $cadangan;
+        }
+
+        $tabel = [];
+        $kolom = [];
+
+        foreach (explode("\n", mb_substr($bagian, $pos)) as $baris) {
+            $baris = trim($baris);
+
+            if (preg_match('/^TABEL:\s*(.+)$/i', $baris, $m)) {
+                foreach (explode(',', $m[1]) as $nama) {
+                    $nama = strtolower(trim($nama));
+
+                    if ($nama !== '') {
+                        $tabel[] = $nama;
+                    }
+                }
+
+                continue;
+            }
+
+            if (preg_match('/^KOLOM:\s*([A-Za-z0-9_]+)\s*:\s*(.+)$/i', $baris, $m)) {
+                $namaTabel = strtolower(trim($m[1]));
+                $daftar = array_values(array_filter(array_map(
+                    fn($c) => strtolower(trim($c)),
+                    explode(',', $m[2])
+                )));
+
+                if ($namaTabel !== '' && $daftar !== []) {
+                    $kolom[$namaTabel] = array_values(array_unique(array_merge($kolom[$namaTabel] ?? [], $daftar)));
+                }
+            }
+        }
+
+        if ($tabel === [] && $kolom === []) {
+            Log::warning('RagRules: Bagian 6c ada tetapi tidak berisi baris TABEL:/KOLOM: — memakai daftar cadangan blocklist.');
+
+            return $cadangan;
+        }
+
+        return ['tabel' => array_values(array_unique($tabel)), 'kolom' => $kolom];
     }
 
     /**

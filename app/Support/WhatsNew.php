@@ -34,10 +34,38 @@ class WhatsNew
                 return self::$cache = collect();
             }
 
-            return self::$cache = WhatsNewItem::query()->aktif()->limit(self::MAKS)->get();
+            return self::$cache = self::urutkan(
+                WhatsNewItem::query()->aktif()->limit(self::MAKS)->get()
+            );
         } catch (\Throwable $e) {
             return self::$cache = collect();
         }
+    }
+
+    /**
+     * Pastikan urutan modal selalu "terbaru dulu": nilai urut terbesar lebih
+     * dulu, lalu id terbesar, lalu updated_at terbaru.
+     *
+     * Query di scopeAktif() sudah mengurutkan di sisi SQL. Pengurutan ulang di
+     * PHP ini menjaga aturan yang sama tetap berlaku untuk koleksi yang datang
+     * dari cache atau dari pemanggil lain, dan supaya aturannya bisa diuji
+     * tanpa koneksi database.
+     *
+     * @param  Collection<int, WhatsNewItem>  $items
+     * @return Collection<int, WhatsNewItem>
+     */
+    public static function urutkan(Collection $items): Collection
+    {
+        return $items
+            ->sortByDesc(function (WhatsNewItem $item) {
+                return sprintf(
+                    '%012d:%012d:%012d',
+                    (int) $item->sort_order,
+                    (int) $item->getKey(),
+                    (int) optional($item->updated_at)->timestamp
+                );
+            })
+            ->values();
     }
 
     /**

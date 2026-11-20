@@ -270,7 +270,7 @@
                             <i class="fas fa-save mr-1"></i> Ambil &amp; Simpan Wajah
                           </button>
 
-                          <div class="text-center mt-3">
+                          <div class="text-center mt-3 d-flex justify-content-center">
                             <img id="registerPreview" class="img-thumbnail d-none" style="max-height:180px;" alt="Preview wajah">
                           </div>
                         </div>
@@ -340,16 +340,19 @@
               {{-- ================= DATA ================= --}}
               <div class="tab-pane fade" id="dataPane">
                 <div class="card shadow mb-4">
-                  <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Data Wajah Terdaftar</h6>
-                  </div>
+                  <div class="card-header py-3 d-flex align-items-center justify-content-between">
+                      <h6 class="m-0 font-weight-bold text-primary">Data Wajah Terdaftar</h6>
+                      <small class="text-muted">
+                        <i class="fas fa-sort-amount-down-alt mr-1"></i>Diurutkan dari wajah terbaru
+                      </small>
+                    </div>
                   <div class="card-body">
                     <div class="table-responsive">
                       <table class="table table-bordered table-sm" id="faceDataTable" width="100%">
                         <thead>
                           <tr>
                             <th width="40">#</th>
-                            <th width="70">Foto</th>
+                            <th width="80">Foto</th>
                             <th>NPK</th>
                             <th>Nama</th>
                             <th>Status Wajah</th>
@@ -366,14 +369,19 @@
                               $userObj  = $usersByNpk->get($cleanNpk) ?? null;
                           @endphp
                           <tr>
-                            <td>{{ $loop->iteration }}</td>
+                            <td data-order="{{ $face->updated_at ? $face->updated_at->getTimestamp() : 0 }}">{{ $loop->iteration }}</td>
                             <td class="text-center">
-                              <img data-src="{{ $face->face_img }}" class="face-thumb rounded border shadow-sm btn-preview-photo"
-                                alt="Wajah {{ $face->npk }}" loading="lazy" style="cursor: pointer; width: 50px; height: 50px; object-fit: cover;"
-                                data-full="{{ $face->face_img }}"
+                              {{-- Foto TIDAK dirender di tabel. Tombol ini hanya membawa
+                                   URL endpoint; foto baru diunduh saat modal dibuka,
+                                   supaya halaman tidak mengangkut ratusan foto base64. --}}
+                              <button type="button"
+                                class="btn btn-outline-primary btn-sm btn-preview-photo"
+                                data-photo="{{ route('face-recognition.photo', $face) }}"
                                 data-npk="{{ $face->npk }}"
                                 data-name="{{ $face->name }}"
-                                title="Klik untuk perbesar foto">
+                                title="Lihat foto wajah {{ $face->npk }}">
+                                <i class="fas fa-image"></i>
+                              </button>
                             </td>
                             <td>
                               <strong>{{ $face->npk }}</strong>
@@ -457,7 +465,17 @@
                     </button>
                   </div>
                   <div class="modal-body text-center p-4">
-                    <img id="facePhotoModalImg" src="" alt="Foto Wajah" class="img-fluid rounded shadow border" style="max-height: 400px; width: auto;">
+                    <div id="facePhotoModalMuat" class="py-5 text-muted small" hidden>
+                      <i class="fas fa-circle-notch fa-spin mr-1"></i> Memuat foto...
+                    </div>
+                    <div id="facePhotoModalGagal" class="alert alert-warning small py-2 px-3" hidden>
+                      <i class="fas fa-exclamation-triangle mr-1"></i>
+                      Foto tidak dapat dimuat. Data wajah mungkin sudah dihapus.
+                    </div>
+                    <div class="d-flex justify-content-center">
+                      <img id="facePhotoModalImg" src="" alt="Foto Wajah" class="img-fluid rounded shadow border"
+                           style="max-height: 400px; width: auto; display: none;">
+                    </div>
                     <div class="mt-3">
                       <h5 class="font-weight-bold text-gray-900 mb-1" id="facePhotoModalName">-</h5>
                       <span class="badge badge-primary px-3 py-1 font-weight-bold" id="facePhotoModalNpk">-</span>
@@ -882,68 +900,61 @@
 
       /* ============================ DATA TABLE & ACTIONS ============================ */
       jQuery(function () {
-        // Lazy-load thumbnail wajah: tanpa src, browser menahan decode base64
-        // sampai baris benar-benar dibutuhkan. Ini menjaga payload awal tab
-        // Data tetap ringan saat ribuan foto terdaftar, sementara modal
-        // preview tetap memuat foto penuh saat diklik.
-        var faceThumbObserver = null;
-        if ('IntersectionObserver' in window) {
-          faceThumbObserver = new IntersectionObserver(function (entries) {
-            entries.forEach(function (entry) {
-              if (entry.isIntersecting) {
-                var img = entry.target;
-                if (img.dataset.src) {
-                  img.src = img.dataset.src;
-                  img.removeAttribute('data-src');
-                }
-                faceThumbObserver.unobserve(img);
-              }
-            });
-          }, { rootMargin: '200px 0px' });
-        }
-
-        function observeFaceThumbs(container) {
-          var scope = container ? jQuery(container) : jQuery(document);
-          scope.find('img.face-thumb[data-src]').each(function () {
-            if (faceThumbObserver) {
-              faceThumbObserver.observe(this);
-            } else if (this.dataset.src) {
-              this.src = this.dataset.src;
-              this.removeAttribute('data-src');
-            }
-          });
-        }
-
         if (jQuery('#faceDataTable').length && !jQuery.fn.DataTable.isDataTable('#faceDataTable')) {
           jQuery('#faceDataTable').DataTable({
-            order: [[0, 'asc']],
+            // Kolom # memuat data-order = timestamp pendaftaran. Urut menurun
+            // berarti wajah terbaru tampil paling atas, sesuai permintaan.
+            order: [[0, 'desc']],
+            columnDefs: [{ targets: 0, type: 'num' }],
             pageLength: 25,
             language: {
               emptyTable: 'Belum ada data wajah terdaftar.'
-            },
-            createdRow: function (row) {
-              observeFaceThumbs(row);
-            },
-            drawCallback: function () {
-              observeFaceThumbs(this.api().table().node());
             }
           });
         }
 
-        // Fallback untuk DataTables lama / jika observer tidak dipanggil
-        // saat inisialisasi pertama.
-        observeFaceThumbs();
+        /* Modal preview foto wajah.
+           Foto TIDAK ikut dirender di tabel. URL foto disimpan di tombol,
+           lalu permintaan ke server baru dibuat ketika modal benar-benar
+           tampil — satu foto per klik, bukan ratusan sekaligus. */
+        var fotoSumber = '';
 
-        // Modal Preview Foto Wajah
         jQuery(document).on('click', '.btn-preview-photo', function () {
-          var fullImgUrl = jQuery(this).data('full') || jQuery(this).data('img');
-          var npk    = jQuery(this).data('npk');
-          var name   = jQuery(this).data('name') || '-';
+          var tombol = jQuery(this);
+          fotoSumber = tombol.data('photo') || '';
 
-          jQuery('#facePhotoModalImg').attr('src', fullImgUrl);
-          jQuery('#facePhotoModalNpk').text('NPK: ' + npk);
-          jQuery('#facePhotoModalName').text(name);
+          jQuery('#facePhotoModalNpk').text('NPK: ' + (tombol.data('npk') || '-'));
+          jQuery('#facePhotoModalName').text(tombol.data('name') || '-');
+          jQuery('#facePhotoModalImg').hide().attr('src', '');
+          jQuery('#facePhotoModalGagal').prop('hidden', true);
+          jQuery('#facePhotoModalMuat').prop('hidden', false);
+
           jQuery('#facePhotoModal').modal('show');
+        });
+
+        jQuery('#facePhotoModal').on('show.bs.modal', function () {
+          if (!fotoSumber) { return; }
+
+          jQuery('#facePhotoModalMuat').prop('hidden', false);
+
+          var pemuat = new Image();
+          pemuat.onload = function () {
+            jQuery('#facePhotoModalMuat').prop('hidden', true);
+            jQuery('#facePhotoModalImg').attr('src', fotoSumber).show();
+          };
+          pemuat.onerror = function () {
+            jQuery('#facePhotoModalMuat').prop('hidden', true);
+            jQuery('#facePhotoModalGagal').prop('hidden', false);
+          };
+          pemuat.src = fotoSumber;
+        });
+
+        // Bebaskan memori saat modal ditutup; foto diambil ulang bila dibuka lagi.
+        jQuery('#facePhotoModal').on('hidden.bs.modal', function () {
+          jQuery('#facePhotoModalImg').hide().attr('src', '');
+          jQuery('#facePhotoModalMuat').prop('hidden', true);
+          jQuery('#facePhotoModalGagal').prop('hidden', true);
+          fotoSumber = '';
         });
 
         // Toggle Izin Login Wajah

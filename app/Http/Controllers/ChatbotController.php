@@ -132,9 +132,27 @@ class ChatbotController extends Controller
             $activeSession = ChatbotSession::with('messages')->find($request->integer('session'));
         }
 
+        $penanya = $request->user();
+        $rolePayroll = null;
+
+        try {
+            $penanya?->loadMissing('rolePayroll');
+            $rolePayroll = $penanya?->rolePayroll?->payroll_role;
+        } catch (\Throwable $e) {
+            Log::warning('Chatbot: role_payrolls tidak bisa dibaca untuk header — ' . $e->getMessage());
+        }
+
         return view('chatbot.index', [
             'sessions' => $sessions,
             'activeSession' => $activeSession,
+            // Identitas penanya + role payroll-nya, dipakai header chatbot.
+            // Role dibaca dari role_payrolls (bukan nama role Spatie), sama
+            // seperti guard R33 di AiChatService. Kalau tabel role_payrolls
+            // tidak terbaca, halaman tetap harus bisa dibuka — role dianggap
+            // tidak terdaftar (badge merah), dan pertanyaan payroll nanti
+            // ditolak oleh guard.
+            'penanya' => $penanya,
+            'rolePayroll' => $rolePayroll,
         ]);
     }
 
