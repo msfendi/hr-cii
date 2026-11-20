@@ -49,6 +49,13 @@ class IzinDinasMessageFormatter
         $approveCmd = '/approve-izin-dinas' . $id;
         $rejectCmd  = '/tolak-izin-dinas' . $id . ' <alasan>';
 
+        // Deep link WhatsApp: buka chat bot dengan teks command sudah terisi.
+        // Nomor bot diambil dari config yang sama dengan pesan cuti, supaya
+        // approver selalu melihat satu nomor bot saja di semua dokumen.
+        $botNumber   = (string) config('services.wa_gateway.bot_number', '6287731665679');
+        $approveLink = 'https://wa.me/' . $botNumber . '?text=' . urlencode($approveCmd);
+        $rejectLink  = 'https://wa.me/' . $botNumber . '?text=' . urlencode($rejectCmd);
+
         return <<<MSG
         ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
         ┃ 📋 *IZIN DINAS — BUTUH PERSETUJUAN*
@@ -73,12 +80,12 @@ class IzinDinasMessageFormatter
         Yth. *$approverName*,
         mohon berikan keputusan Anda:
 
-        ✅ *Setujui* → $approveCmd
-        ❌ *Tolak* → $rejectCmd
+        ✅ *Setujui* → $approveLink
+        ❌ *Tolak* → $rejectLink
 
         Atau balas langsung ke chat ini:
-        • $approveCmd
-        • $rejectCmd
+        • `$approveCmd`
+        • `$rejectCmd`
 
         ⚠️ Mohon pastikan *No. Pengajuan* sudah sesuai.
         MSG;
