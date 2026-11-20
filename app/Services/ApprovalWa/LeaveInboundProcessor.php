@@ -6,47 +6,44 @@ use App\Models\LeaveRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class InboundApprovalProcessor
+/**
+ * Proses keputusan approval CUTI yang masuk lewat WhatsApp.
+ *
+ * Dokumen lain punya processor sendiri — lihat IzinDinasInboundProcessor.
+ * Pemilihan processor dilakukan ApprovalInboundDispatcher berdasarkan doctype
+ * yang dibaca dari command.
+ */
+class LeaveInboundProcessor
 {
     /**
-     * Parse inbound WhatsApp message.
-     * Accepted formats:
-     *   APPROVE <id>            /approve <id>
-     *   REJECT <id> <reason>    /tolak <id> <reason>
-     *   BATAL <id> <reason>     /batal <id> <reason>
+     * Parse pesan command khusus CUTI.
+     *
+     * Bentuk yang diterima:
+     *   /approve-cuti909        APPROVE-CUTI909
+     *   /tolak-cuti909 <alasan>
+     *   /batal-cuti909 <alasan>
+     *
+     * Format lama tanpa doctype (`/approve 909`) juga diterima dan dianggap
+     * cuti, karena pesan yang sudah terkirim ke approver memakai format itu.
+     * Doctype izin dinas ditolak di sini (null) supaya tidak pernah diproses
+     * sebagai cuti.
      */
     public static function parse(string $message): ?array
     {
-        $message = trim($message);
+        // Grammar dipusatkan di ApprovalCommandParser supaya cuti dan izin
+        // dinas tidak pernah berbeda tafsir. Method ini tetap ada dengan
+        // bentuk lama (tanpa `doc`) untuk pemanggil yang sudah terlanjur ada.
+        $parsed = ApprovalCommandParser::parse($message);
 
-        // APPROVE / /approve
-        if (preg_match('/^(?:APPROVE|\/approve)\s+#?(\d+)$/i', $message, $m)) {
-            return [
-                'decision' => 'approve',
-                'id'       => (int) $m[1],
-                'reason'   => null,
-            ];
+        if ($parsed === null || $parsed['doc'] !== ApprovalCommandParser::DOC_CUTI) {
+            return null;
         }
 
-        // REJECT / /tolak with optional reason
-        if (preg_match('/^(?:REJECT|\/tolak)\s+#?(\d+)(?:\s+(.+))?$/i', $message, $m)) {
-            return [
-                'decision' => 'reject',
-                'id'       => (int) $m[1],
-                'reason'   => isset($m[2]) ? trim($m[2]) : null,
-            ];
-        }
-
-        // BATAL / /batal — membatalkan keputusan yang sudah approved
-        if (preg_match('/^(?:BATAL|\/batal)\s+#?(\d+)(?:\s+(.+))?$/i', $message, $m)) {
-            return [
-                'decision' => 'revert',
-                'id'       => (int) $m[1],
-                'reason'   => isset($m[2]) ? trim($m[2]) : 'Dibatalkan via WhatsApp',
-            ];
-        }
-
-        return null;
+        return [
+            'decision' => $parsed['decision'],
+            'id'       => $parsed['id'],
+            'reason'   => $parsed['reason'],
+        ];
     }
 
     /**
@@ -62,7 +59,7 @@ class InboundApprovalProcessor
     {
         $parsed = self::parse($message);
         if (!$parsed) {
-            return "⚠️ Format tidak dikenali.\n\nGunakan:\n- /approve <ID>\n- /tolak <ID> <alasan>\n- /batal <ID> <alasan>";
+            return ApprovalCommandParser::helpText();
         }
 
         $requestId = $parsed['id'];
@@ -85,7 +82,7 @@ class InboundApprovalProcessor
         $validation = LeaveApprovalQuery::validateApprover($phone, $requestId);
         if (!$validation['valid']) {
             Log::warning("[InboundApproval] Unauthorized: $phone for #$requestId — {$validation['reason']}");
-            return WaMessageFormatter::formatUnauthorized($requestId, $validation['reason']);
+            return LeaveMessageFormatter::formatUnauthorized($requestId, $validation['reason']);
         }
 
         $approver     = $validation['approver'];
@@ -104,7 +101,7 @@ class InboundApprovalProcessor
             if ($affected === 0) {
                 $conn->rollBack();
                 Log::warning("[InboundApproval] #$requestId: affected=0 (already processed), aborted");
-                return WaMessageFormatter::formatUnauthorized(
+                return LeaveMessageFormatter::formatUnauthorized(
                     $requestId,
                     'Pengajuan ini sudah diproses sebelumnya. Tidak ada perubahan.'
                 );
@@ -137,7 +134,7 @@ class InboundApprovalProcessor
             }
         }
 
-        return WaMessageFormatter::formatConfirmation($requestId, $decision, $approverName);
+        return LeaveMessageFormatter::formatConfirmation($requestId, $decision, $approverName);
     }
 
     /**
@@ -158,7 +155,7 @@ class InboundApprovalProcessor
         $revert = LeaveApprovalQuery::revertDecision($requestId, $approver->NPK);
         if (!$revert['ok']) {
             Log::warning("[InboundApproval] Revert denied for #$requestId by {$approver->NPK} — {$revert['reason']}");
-            return WaMessageFormatter::formatUnauthorized($requestId, $revert['reason']);
+            return LeaveMessageFormatter::formatUnauthorized($requestId, $revert['reason']);
         }
 
         $req = $revert['request'];
@@ -172,7 +169,7 @@ class InboundApprovalProcessor
 
             if ($affected === 0) {
                 $conn->rollBack();
-                return WaMessageFormatter::formatUnauthorized(
+                return LeaveMessageFormatter::formatUnauthorized(
                     $requestId,
                     'Pengajuan ini sudah diproses sebelumnya. Tidak ada perubahan.'
                 );

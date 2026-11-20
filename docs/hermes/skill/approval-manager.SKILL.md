@@ -34,10 +34,24 @@ export WA_BRIDGE_URL="http://127.0.0.1:3000"        # Hermes Baileys bridge
 
 ## Trigger Pattern (Inbound WA)
 
-Load this skill when a WhatsApp message matches:
-- `/approve <ID>` or `APPROVE <ID>` (with or without `#`)
-- `/tolak <ID> <alasan>` or `REJECT <ID> <alasan>`
-- `/batal <ID> <alasan>` or `BATAL <ID> <alasan>` — cancels an already-approved request
+Load this skill when a WhatsApp message matches one of these commands.
+Commands are **grouped by document type** so IDs from different documents can
+never be confused:
+
+| Document | Approve | Reject |
+|----------|---------|--------|
+| Cuti | `/approve-cuti<ID>` | `/tolak-cuti<ID> <alasan>` |
+| Cuti (cancel) | `/batal-cuti<ID> <alasan>` | — |
+| Izin Dinas | `/approve-izin-dinas<ID>` | `/tolak-izin-dinas<ID> <alasan>` |
+
+Notes:
+- Space between the document part and the ID is optional:
+  `/approve-izin-dinas10009` and `/approve-izin-dinas 10009` both work.
+- **Legacy form still accepted**: `/approve <ID>`, `/tolak <ID>`, `/batal <ID>`
+  are treated as **cuti**, because messages already delivered to approvers
+  contain that format.
+- Izin Dinas has **no cancel command** — it does not consume a balance, so a
+  decision cannot be reverted. `/batal-izin-dinas…` is not recognized.
 
 **Never validate approver authorization yourself** — Laravel does that. The agent
 parses, relays, and replies.
@@ -63,9 +77,17 @@ python3 ~/.hermes/scripts/approval-inbound.py \
 
 | Command | Status before | Result |
 |---------|---------------|--------|
-| `/approve <ID>` | `pending` | → `approved`, advance progress, notify next level |
-| `/tolak <ID> <alasan>` | `pending` | → `rejected`, void sibling rows (chain stops) |
-| `/batal <ID> <alasan>` | `approved` | → `rejected`, **restore leave balance**, un-void siblings |
+| `/approve-cuti<ID>` | `pending` | → `approved`, advance progress, notify next level |
+| `/tolak-cuti<ID> <alasan>` | `pending` | → `rejected`, void sibling rows (chain stops) |
+| `/batal-cuti<ID> <alasan>` | `approved` | → `rejected`, **restore leave balance**, un-void siblings |
+| `/approve-izin-dinas<ID>` | `pending` | → approved at that level, notify next level; status becomes `approved` at the last level |
+| `/tolak-izin-dinas<ID> <alasan>` | `pending` | → `rejected` (reason required), chain stops |
+
+Izin Dinas stores its whole approval chain as JSON (`approval_chain`, `answers`,
+`current_level`) instead of one row per level like cuti. Laravel resolves the
+approver from the sender's phone number **against that chain**, not against
+`approval_rules` — the chain is a snapshot and may contain approvers that no
+longer exist in the master.
 
 Laravel returns HTTP 200 with `status: ok|rejected|ignored` and a `reply` string.
 Always send `reply` to the approver — including error replies.
@@ -85,11 +107,12 @@ Laravel POSTs to the Hermes webhook route when a leave is submitted or a level
 is approved. The webhook runs `approval-webhook.py`, which fetches the payload
 from `/api/approval/trigger` and sends the WhatsApp message.
 
-**The message text is rendered by Laravel** (`WaMessageFormatter`) and delivered
-in the payload's `message` field — the messaging layer sends it verbatim. It
-contains: nama pemohon, NPK, jenis cuti, tanggal pengajuan, periode, durasi,
-alasan, no. pengajuan, posisi level approval, plus deep links for
-`/approve` and `/tolak`. Do not re-format it.
+**The message text is rendered by Laravel** (`LeaveMessageFormatter` untuk cuti,
+`IzinDinasMessageFormatter` untuk izin dinas) and delivered in the payload's
+`message` field — the messaging layer sends it verbatim. For cuti it contains:
+nama pemohon, NPK, jenis cuti, tanggal pengajuan, periode, durasi, alasan,
+no. pengajuan, posisi level approval, plus deep links for `/approve-cuti` and
+`/tolak-cuti`. Do not re-format it.
 
 **Saldo cuti:** untuk **Cuti Tahunan** saja, pesan juga memuat blok saldo —
 sisa saldo tahun berjalan (tahun tanggal mulai) dan sisa setelah pengajuan
@@ -101,10 +124,39 @@ karena tidak memakai saldo. Saldo dibaca dari `leave_balances`
 ### Via cron (safety net — sweeps all pending)
 
 ```bash
-python3 ~/.hermes/scripts/approval-outbound.py --dry-run   # preview, NO send
-python3 ~/.hermes/scripts/approval-outbound.py              # live send
-python3 ~/.hermes/scripts/approval-outbound.py --token <token>  # one pengajuan
+# Dry-run: susun + cetak pesan, TIDAK mengirim
+python3 ~/.hermes/scripts/approval-outbound.py --doc cuti --dry-run
+python3 ~/.hermes/scripts/approval-outbound.py --doc izin-dinas --dry-run
+
+# Kirim sungguhan — selalu lewat wrapper, satu job per dokumen
+bash ~/.hermes/scripts/check-leave-approval.sh             # cuti
+bash ~/.hermes/scripts/check-work-assignment-approval.sh   # izin dinas
 ```
+
+Selalu pakai wrapper (`check-*.sh`) untuk job terjadwal, **jangan**
+`approval-outbound.py` polos: tanpa `--doc` script menyapu **kedua** doctype,
+sehingga bisa tumpang tindih dengan job dokumen lain dan approver menerima
+pesan yang sama dua kali.
+
+```bash
+hermes cron create "every 5h" --name "work-assignment-approval-check" \
+  --script "check-work-assignment-approval.sh" --no-agent --deliver local
+```
+
+Jangan pula menjadwalkan `php artisan approval:check-pending` /
+`approval:notify-izin-dinas` bersamaan dengan job di atas — itu jalur Laravel
+langsung dan akan mengirim pesan kedua.
+
+### Payload untuk Izin Dinas
+
+Laravel juga menyiapkan pesan siap kirim (`IzinDinasMessageFormatter`):
+
+- `doc: "izin-dinas"`, `request_id`, `token`, `level`, `total_levels`
+- pemohon (nama, NPK), tanggal dinas (multi-tanggal, dipotong bila >3),
+  durasi, tujuan, keperluan, jam keluar, rencana kembali
+- `approve_command: "/approve-izin-dinas<ID>"`, `reject_command: "/tolak-izin-dinas<ID> <alasan>"`
+
+Kirim `message` apa adanya. Jangan menambah atau mengubah command di dalamnya.
 
 ## Phone Number Handling
 

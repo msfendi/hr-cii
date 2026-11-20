@@ -7,10 +7,20 @@ Opsi C decoupling:
   - Script ini: POST decision ke /api/approval/decision, lalu kirim balasan
     dari response ke approver via WA bridge.
 
+Command approver dibedakan per jenis dokumen:
+  /approve-cuti909              /tolak-cuti909 <alasan>     /batal-cuti909 <alasan>
+  /approve-izin-dinas10009      /tolak-izin-dinas10009 <alasan>
+
+Format lama tanpa doctype (`/approve 909`) masih diterima Laravel dan
+dianggap CUTI, karena pesan yang sudah terkirim ke approver memakai format itu.
+Untuk dokumen Izin Dinas, SELALU kirim pesan apa adanya (--message) supaya
+doctype ikut terbaca. Kalau memakai --decision, sertakan --doc.
+
 Usage:
-  python3 approval-inbound.py --phone 6281234567890 --message "/approve 849"
-  python3 approval-inbound.py --phone 6281234567890 --decision approve --request-id 849
-  python3 approval-inbound.py --phone 6281234567890 --message "/tolak 849 alasan" --dry-run
+  python3 approval-inbound.py --phone 6281234567890 --message "/approve-cuti909"
+  python3 approval-inbound.py --phone 6281234567890 --message "/approve-izin-dinas10009"
+  python3 approval-inbound.py --phone 6281234567890 --decision approve --request-id 10009 --doc izin-dinas
+  python3 approval-inbound.py --phone 6281234567890 --message "/tolak-izin-dinas10009 jadwal bentrok" --dry-run
 
 Env:
   HR_CII_API_URL      base URL Laravel API (wajib)
@@ -82,8 +92,30 @@ def _http(method, url, payload=None, headers=None, timeout=60):
         return 0, {"error": str(e)}
 
 
-def post_decision(phone, message=None, decision=None, request_id=None, reason=None):
-    """POST decision ke Laravel. Returns (status, body)."""
+DOC_LABELS = {
+    "cuti": "CUTI",
+    "izin-dinas": "IZIN DINAS",
+}
+
+DEFAULT_DOC = "cuti"
+
+
+def normalize_doc(value):
+    """Samakan penulisan doctype; tidak dikenal → cuti (perilaku lama)."""
+    doc = str(value or "").strip().lower().replace("_", "-").replace(" ", "-")
+    return doc if doc in DOC_LABELS else DEFAULT_DOC
+
+
+def doc_label(doc):
+    return DOC_LABELS.get(doc, doc.upper())
+
+
+def post_decision(phone, message=None, decision=None, request_id=None, reason=None, doc=None):
+    """POST decision ke Laravel. Returns (status, body).
+
+    `doc` hanya dipakai kalau pengirim memakai --decision (bukan pesan asli).
+    Kalau memakai --message, doctype sudah terbaca dari teksnya sendiri.
+    """
     if not API_URL or not API_TOKEN:
         log("ERROR: HR_CII_API_URL dan APPROVAL_API_TOKEN wajib diset")
         sys.exit(2)
@@ -97,6 +129,8 @@ def post_decision(phone, message=None, decision=None, request_id=None, reason=No
         payload["request_id"] = request_id
     if reason:
         payload["reason"] = reason
+    if doc and not message:
+        payload["doc"] = normalize_doc(doc)
 
     return _http(
         "POST",
@@ -126,9 +160,10 @@ def send_wa(phone, message):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--phone", required=True, help="nomor WA approver (raw)")
-    p.add_argument("--message", help="pesan asli dari approver, mis. '/approve 849'")
+    p.add_argument("--message", help="pesan asli dari approver, mis. '/approve-izin-dinas10009'")
     p.add_argument("--decision", help="approve | reject | revert (alternatif dari --message)")
     p.add_argument("--request-id", type=int, help="ID pengajuan (dipakai bila --decision)")
+    p.add_argument("--doc", help="cuti | izin-dinas (dipakai bila --decision)")
     p.add_argument("--reason", help="alasan (untuk reject)")
     p.add_argument("--dry-run", action="store_true", help="tidak kirim balasan ke WA")
     args = p.parse_args()
@@ -136,6 +171,9 @@ def main():
     if not args.message and not (args.decision and args.request_id):
         log("ERROR: butuh --message atau (--decision + --request-id)")
         return 2
+
+    doc = normalize_doc(args.doc)
+    log(f"dokumen: {doc_label(doc)}" + ("" if args.doc else " (default, tanpa --doc)"))
 
     # Normalisasi nomor pengirim dulu (bisa "+6012…", "0812…", atau JID).
     sender = normalize_phone(args.phone)
@@ -149,6 +187,7 @@ def main():
         decision=args.decision,
         request_id=args.request_id,
         reason=args.reason,
+        doc=args.doc,
     )
 
     if status != 200:

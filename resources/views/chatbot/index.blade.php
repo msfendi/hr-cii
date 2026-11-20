@@ -155,6 +155,11 @@
                                     </div>
                                 @endif
 
+                                @include('chatbot.partials._tabel_jawaban', [
+                                    'table' => $meta['table'] ?? null,
+                                    'chart' => $meta['chart'] ?? null,
+                                ])
+
                                 @if (! empty($meta['chart']))
                                     @php $ch = $meta['chart']; @endphp
                                     <figure class="message-chart" id="chart-{{ $message->id }}">
@@ -736,6 +741,9 @@ body {
 .md-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
 .md-table th, .md-table td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
 .md-table thead th { background: #f1f5f9; font-weight: 600; }
+/* Kolom uang rata kanan + angka tabular supaya nilai tabel mudah dibandingkan
+   dengan batang grafik (R35). */
+.md-table th.angka, .md-table td.angka { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Details / Error */
 /* SQL panjang: sebelumnya <pre> tanpa CSS sama sekali, sehingga satu baris
@@ -1096,6 +1104,31 @@ body {
             bodyHtml = `<div class="message-plain">${escHtml(content)}</div>`;
         }
 
+        // Tabel data jawaban (R35). Dirender dari meta.table yang berasal dari
+        // baris hasil query yang SAMA dengan grafik, jadi angka tabel dan angka
+        // grafik tidak bisa berbeda lagi.
+        let tableHtml = '';
+        if (meta && meta.table && Array.isArray(meta.table.kolom) && Array.isArray(meta.table.baris)) {
+            const tb = meta.table;
+            const jml = (tb.jumlah !== undefined && tb.jumlah !== null) ? tb.jumlah : tb.baris.length;
+            const kapGrafik = (meta.chart && meta.chart.bar_count)
+                ? ` &middot; grafik memakai ${escHtml(String(meta.chart.bar_count))} baris pertama`
+                : '';
+            const head = tb.kolom.map(k =>
+                `<th class="${k.uang ? 'angka' : ''}">${escHtml(k.label || k.key || '')}</th>`
+            ).join('');
+            const body = tb.baris.map(r =>
+                `<tr>${r.map((sel, i) => {
+                    const uang = !!(tb.kolom[i] && tb.kolom[i].uang);
+                    return `<td class="${uang ? 'angka' : ''}">${escHtml(sel)}</td>`;
+                }).join('')}</tr>`
+            ).join('');
+            tableHtml = `<p class="message-data-caption"><i class="fas fa-table"></i> `
+                + `<span>Tabel data &middot; ${jml} baris${kapGrafik}</span></p>`
+                + `<div class="cw-table-wrap"><table class="md-table"><thead><tr>${head}</tr></thead>`
+                + `<tbody>${body}</tbody></table></div>`;
+        }
+
         // Grafik jawaban AI (gambar PNG dari server)
         let chartHtml = '';
         if (meta && meta.chart && meta.chart.url) {
@@ -1158,7 +1191,7 @@ body {
         row.innerHTML = `
             <div class="message-avatar message-avatar--ai"><img src="{{ asset('img/chutex_ai_assistant.png') }}" alt="AI Assistant" class="ai-avatar"></div>
             <div class="message-bubble-col">
-                <div class="message-bubble message-bubble--ai">${bodyHtml}${chartHtml}${exportHtml}${linksHtml}${errHtml}</div>
+                <div class="message-bubble message-bubble--ai">${bodyHtml}${tableHtml}${chartHtml}${exportHtml}${linksHtml}${errHtml}</div>
                 <span class="message-time">${nowTime()}</span>
             </div>`;
         chatMessages.appendChild(row);

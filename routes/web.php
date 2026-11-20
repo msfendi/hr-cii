@@ -48,6 +48,12 @@ use App\Http\Controllers\EmployeeMutationController;
 use App\Http\Controllers\LeaveApprovalController;
 use App\Http\Controllers\LiveAccessController;
 use App\Http\Controllers\OrgChartController;
+use App\Http\Controllers\GateSecurityController;
+use App\Http\Controllers\WorkAssignmentApprovalController;
+use App\Http\Controllers\WorkAssignmentController;
+use App\Http\Controllers\WorkAssignmentPdfController;
+use App\Http\Controllers\WorkAssignmentRecapController;
+use App\Http\Controllers\DevLoginController;
 use App\Http\Controllers\EmployeePayrollController;
 use App\Http\Controllers\EmployeesContractController;
 use App\Http\Controllers\EmployeeShiftController;
@@ -1597,6 +1603,100 @@ Route::prefix('pengajuan-cuti')->group(function () {
     Route::post('/portal-approval/reject/{id}', [LeaveApprovalController::class, 'portalReject'])->name('pengajuan-cuti.portal-approval.reject');
     Route::post('/portal-approval/update/{id}', [LeaveApprovalController::class, 'portalUpdateDecision'])->name('pengajuan-cuti.portal-approval.update');
 });
+
+// ========================================
+// WORK ASSIGNMENT REQUEST (Surat Ijin Dinas Luar — CII.FM.HR.02.08)
+// ========================================
+// Berbasis session (tanpa middleware auth), pemohon login pakai NPK.
+// Terpisah total dari `ijin_meninggalkan_pekerjaans`.
+Route::prefix('work-assignment')->name('work-assignment.')->group(function () {
+    Route::get('/login', [WorkAssignmentController::class, 'login'])->name('login');
+    Route::post('/verify-manual', [WorkAssignmentController::class, 'verifyManual'])->name('verify-manual');
+    Route::get('/logout', [WorkAssignmentController::class, 'logout'])->name('logout');
+
+    // Dashboard: riwayat pengajuan milik pemohon + tombol pengajuan baru
+    Route::get('/', [WorkAssignmentController::class, 'dashboard'])->name('dashboard');
+
+    Route::get('/form', [WorkAssignmentController::class, 'form'])->name('form');
+    Route::post('/submit', [WorkAssignmentController::class, 'submit'])->name('submit');
+
+    // Status approval terbaru (auto-refresh halaman pemohon)
+    Route::get('/progress', [WorkAssignmentController::class, 'progress'])->name('progress');
+
+    // Unduh lampiran milik pemohon sendiri
+    Route::get('/attachment/{id}/{index}', [WorkAssignmentController::class, 'downloadAttachment'])->name('attachment.download');
+
+    // QR pengajuan (untuk discan security di gate keluar/kembali)
+    Route::get('/qr/{id}', [WorkAssignmentController::class, 'qr'])->name('qr');
+});
+
+// ========================================
+// WORK ASSIGNMENT REQUEST — APPROVAL (Admin / Atasan)
+// ========================================
+// Berbeda dari form pengajuan (session-based), halaman ini memakai auth
+// Laravel + NPK user sebagai identitas approver.
+Route::prefix('work-assignment/approval')
+    ->name('work-assignment.approval.')
+    ->middleware('auth')
+    ->group(function () {
+        Route::get('/', [WorkAssignmentApprovalController::class, 'index'])->name('index');
+        Route::get('/get-data', [WorkAssignmentApprovalController::class, 'getData'])->name('get-data');
+        Route::get('/detail/{id}', [WorkAssignmentApprovalController::class, 'detail'])->name('detail');
+        Route::post('/approve/{id}', [WorkAssignmentApprovalController::class, 'approve'])->name('approve');
+        Route::post('/reject/{id}', [WorkAssignmentApprovalController::class, 'reject'])->name('reject');
+        Route::post('/update/{id}', [WorkAssignmentApprovalController::class, 'updateDecision'])->name('update');
+    });
+
+// ========================================
+// WORK ASSIGNMENT REQUEST — MANAGE RECAP (Admin)
+// ========================================
+// oversee SEMUA pengajuan (semua pemohon) + hapus/batalkan.
+Route::prefix('work-assignment/manage')
+    ->name('work-assignment.manage.')
+    ->middleware('auth')
+    ->group(function () {
+        Route::get('/', [WorkAssignmentRecapController::class, 'index'])->name('index');
+        Route::get('/get-data', [WorkAssignmentRecapController::class, 'getData'])->name('get-data');
+        Route::get('/detail/{id}', [WorkAssignmentRecapController::class, 'detail'])->name('detail');
+        Route::post('/delete/{id}', [WorkAssignmentRecapController::class, 'destroy'])->name('destroy');
+        Route::get('/pdf/{id}', [WorkAssignmentPdfController::class, 'show'])->name('pdf');
+        Route::get('/pdf/{id}/download', [WorkAssignmentPdfController::class, 'download'])->name('pdf.download');
+
+        // Lampiran: unduh & hapus per file
+        Route::get('/attachment/{id}/{index}', [WorkAssignmentRecapController::class, 'downloadAttachment'])->name('attachment.download');
+        Route::post('/attachment/{id}/{index}', [WorkAssignmentRecapController::class, 'deleteAttachment'])->name('attachment.delete');
+    });
+
+// ========================================
+// GATE SECURITY — pemeriksaan dokumen lewat scan QR
+// ========================================
+// Generik untuk semua jenis dokumen (lihat App\Services\GateSecurity\GateRegistry).
+// Petugas login cukup NPK; sesi terpisah dari auth Laravel.
+Route::prefix('gate-security')
+    ->name('gate-security.')
+    ->group(function () {
+        Route::get('/login', [GateSecurityController::class, 'login'])->name('login');
+        Route::post('/verify', [GateSecurityController::class, 'verify'])->name('verify');
+        Route::get('/logout', [GateSecurityController::class, 'logout'])->name('logout');
+
+        Route::get('/', [GateSecurityController::class, 'scan'])->name('scan');
+        Route::post('/lookup', [GateSecurityController::class, 'lookup'])->name('lookup');
+        Route::post('/approve', [GateSecurityController::class, 'approve'])->name('approve');
+    });
+
+// Jalur lama (sebelum gate dipisah dari Work Assignment). Halaman gate dulu
+// hanya melayani Izin Dinas di bawah /work-assignment/security. Bookmark dan
+// tautan yang sudah beredar tetap diarahkan ke halaman barunya.
+Route::get('/work-assignment/security', fn () => redirect()->route('gate-security.scan', [], 301));
+Route::get('/work-assignment/security/login', fn () => redirect()->route('gate-security.login', [], 301));
+
+// ========================================
+// DEV ONLY — login cepat untuk pengujian lokal
+// ========================================
+// Route ini tidak aktif di production (guard di dalam controller).
+if (in_array(config('app.env'), ['local', 'testing'], true) || config('app.debug')) {
+    Route::get('/_dev/login-as', [DevLoginController::class, 'loginAs'])->name('dev.login-as');
+}
 
 // ========================================
 // FACE ATTENDANCE (GPS + FACE RECOGNITION)

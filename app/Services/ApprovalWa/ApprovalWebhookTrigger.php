@@ -31,20 +31,27 @@ class ApprovalWebhookTrigger
      *
      * @param string $token
      * @param string $triggerType 'submit' | 'approve' | 'cron' — untuk logging & filtering di Hermes
+     * @param string $doc         doctype dokumen (cuti | izin-dinas). Messaging layer
+     *                            memakai ini untuk tahu notifier mana yang dipanggil
+     *                            saat mengambil payload.
      */
-    public static function notify(string $token, string $triggerType = 'submit'): bool
-    {
+    public static function notify(
+        string $token,
+        string $triggerType = 'submit',
+        string $doc = ApprovalCommandParser::DOC_CUTI
+    ): bool {
         $url    = rtrim((string) config('services.approval_api.webhook_url', ''), '/');
         $secret = (string) config('services.approval_api.webhook_secret', '');
 
         if ($url === '') {
             Log::info('[ApprovalWebhook] webhook_url kosong — fallback ke bridge lokal.');
-            return self::sendDirect($token);
+            return self::sendDirect($token, $doc);
         }
 
         $payload = [
             'token'   => $token,
             'trigger' => $triggerType,
+            'doc'     => $doc,
         ];
 
         try {
@@ -67,11 +74,11 @@ class ApprovalWebhookTrigger
                 ->post($url);
 
             if ($response->successful()) {
-                Log::info("[ApprovalWebhook] Hermes notified for token $token (trigger=$triggerType)");
+                Log::info("[ApprovalWebhook] Hermes notified for $doc token $token (trigger=$triggerType)");
                 return true;
             }
 
-            Log::warning("[ApprovalWebhook] Hermes returned {$response->status()} for token $token: " . $response->body());
+            Log::warning("[ApprovalWebhook] Hermes returned {$response->status()} for $doc token $token: " . $response->body());
             return false;
         } catch (\Throwable $e) {
             Log::error("[ApprovalWebhook] Hermes unreachable: " . $e->getMessage());
@@ -82,9 +89,11 @@ class ApprovalWebhookTrigger
     /**
      * Fallback mode single-server: kirim langsung ke WA bridge.
      */
-    private static function sendDirect(string $token): bool
+    private static function sendDirect(string $token, string $doc = ApprovalCommandParser::DOC_CUTI): bool
     {
-        $result = LeaveApprovalNotifier::notifyToken($token);
+        $result = $doc === ApprovalCommandParser::DOC_IZIN_DINAS
+            ? IzinDinasNotifier::notifyToken($token)
+            : LeaveApprovalNotifier::notifyToken($token);
 
         if ($result['notified'] > 0) {
             return true;

@@ -27,6 +27,7 @@ class ChatbotConversationContextTest extends TestCase
 {
     private AiChatService $svc;
     private ReflectionClass $ref;
+    private $maksSebelumnya = null;
 
     protected function setUp(): void
     {
@@ -266,6 +267,11 @@ class ChatbotConversationContextTest extends TestCase
     public function test_blok_aturan_untuk_turnover_memuat_aturan_kunci(): void
     {
         // RagRules membaca berkas markdown; cache memakai driver array saat test.
+        // Batas diturunkan ke 24.000 HANYA di dalam test ini untuk membuktikan
+        // pemotongan tidak mengorbankan Bagian 7-8; nilainya WAJIB dipulihkan
+        // di tearDown supaya tidak bocor ke test lain (dulu bocor dan membuat
+        // test lain gagal karena prompt dipotong jauh lebih awal).
+        $this->maksSebelumnya = config('chatbot.rag_rules_max_chars');
         config(['cache.default' => 'array', 'chatbot.rag_rules_max_chars' => 24000]);
 
         try {
@@ -282,5 +288,14 @@ class ChatbotConversationContextTest extends TestCase
         // Bagian 7 (batasan SQL Server) & 8 (format jawaban) tidak boleh hilang.
         $this->assertStringContainsString('FORMAT JAWABAN', $prompt);
         $this->assertStringContainsString('BATASAN', $prompt);
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->maksSebelumnya !== null) {
+            config(['chatbot.rag_rules_max_chars' => $this->maksSebelumnya]);
+        }
+
+        parent::tearDown();
     }
 }

@@ -104,7 +104,7 @@ chmod 600 ~/.hermes/approval-wa.env
 Isi `~/.hermes/approval-wa.env`:
 
 ```env
-HR_CII_API_URL=http://192.168.1.252:8010
+HR_CII_API_URL=https://hris.chutex.id
 APPROVAL_API_TOKEN=<harus sama dengan .env Laravel>
 WA_BRIDGE_URL=http://127.0.0.1:3000
 WA_JITTER_SECONDS=15
@@ -144,18 +144,26 @@ Catat URL + secret yang dikembalikan → masukkan ke `.env` Laravel
 ```bash
 hermes cron create "every 5h" \
   --name "leave-approval-sweep" \
-  --script "approval-outbound.py" \
+  --script "check-leave-approval.sh" \
   --no-agent \
   --deliver local
 ```
 
 `--no-agent` → script stdout dikirim langsung, tanpa LLM.
 
+Wrapper `check-leave-approval.sh` memanggil `approval-outbound.py --doc cuti`.
+Selalu pakai wrapper, **jangan** `approval-outbound.py` polos: tanpa `--doc`
+script menyapu cuti **dan** izin dinas, sehingga bisa tumpang tindih dengan job
+Izin Dinas (approver menerima pesan yang sama dua kali).
+
+Untuk modul Izin Dinas (Work Assignment) lihat
+[`WORK_ASSIGNMENT_SETUP.md`](WORK_ASSIGNMENT_SETUP.md).
+
 ### B6. Verifikasi
 
 ```bash
 # Tanpa kirim WA
-python3 ~/.hermes/scripts/approval-outbound.py --dry-run
+python3 ~/.hermes/scripts/approval-outbound.py --doc cuti --dry-run
 
 # Health bridge WA
 curl -s http://127.0.0.1:3000/health
@@ -180,19 +188,29 @@ Script ini:
 3. Laravel update DB dalam transaksi + trigger notif level berikutnya
 4. Script kirim `reply` dari response ke approver via WA bridge
 
-Format yang diterima approver:
+Format yang diterima approver (dikelompokkan per jenis dokumen):
 
-| Command | Status sebelum | Hasil |
-|---------|---------------|-------|
-| `/approve <ID>` | pending | approved, progress maju, notif level berikutnya |
-| `/tolak <ID> <alasan>` | pending | rejected, sibling rows void (chain berhenti) |
-| `/batal <ID> <alasan>` | approved | rejected, **saldo cuti dikembalikan** |
+| Command | Dokumen | Status sebelum | Hasil |
+|---------|---------|---------------|-------|
+| `/approve-cuti<ID>` | Cuti | pending | approved, progress maju, notif level berikutnya |
+| `/tolak-cuti<ID> <alasan>` | Cuti | pending | rejected, sibling rows void (chain berhenti) |
+| `/batal-cuti<ID> <alasan>` | Cuti | approved | rejected, **saldo cuti dikembalikan** |
+| `/approve-izin-dinas<ID>` | Izin Dinas | pending | approved di level itu, notif level berikutnya |
+| `/tolak-izin-dinas<ID> <alasan>` | Izin Dinas | pending | rejected (alasan wajib), chain berhenti |
+
+Catatan:
+- Spasi sebelum nomor opsional: `/approve-izin-dinas10009` = `/approve-izin-dinas 10009`.
+- Format lama `/approve <ID>` masih diterima dan dianggap **cuti**, karena pesan
+  yang sudah terkirim ke approver memakai format itu.
+- Izin Dinas **tidak punya** `/batal` — tidak memakai saldo, jadi keputusan
+  tidak bisa dibatalkan.
 
 ---
 
 ## Bagian D — Format Pesan Notifikasi
 
-Template dirender di **Laravel** (`App\Services\ApprovalWa\WaMessageFormatter`)
+Template dirender di **Laravel** — `App\Services\ApprovalWa\LeaveMessageFormatter`
+untuk cuti, `App\Services\ApprovalWa\IzinDinasMessageFormatter` untuk Izin Dinas —
 dan dikirim sebagai field `message` di payload. Messaging layer hanya
 mengirimkan teks apa adanya.
 
@@ -219,12 +237,12 @@ mengirimkan teks apa adanya.
 Yth. *RAKHMAT BUDIYONO*,
 mohon berikan keputusan Anda:
 
-✅ *Setujui* → https://wa.me/6287731665679?text=%2Fapprove+837
-❌ *Tolak* → https://wa.me/6287731665679?text=%2Ftolak+837+%3Calasan%3E
+✅ *Setujui* → https://wa.me/6287731665679?text=%2Fapprove-cuti837
+❌ *Tolak* → https://wa.me/6287731665679?text=%2Ftolak-cuti837+%3Calasan%3E
 
 Atau balas langsung ke chat ini:
-• `/approve 837`
-• `/tolak 837 <alasan>`
+• `/approve-cuti837`
+• `/tolak-cuti837 <alasan>`
 
 ⚠️ Mohon pastikan *No. Pengajuan* sudah sesuai.
 ```

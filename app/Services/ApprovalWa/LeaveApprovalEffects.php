@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Diekstrak dari LeaveApprovalController supaya logic yang sama dipakai oleh:
  *  - Approve via web portal / admin (LeaveApprovalController::approve)
- *  - Approve via WhatsApp (InboundApprovalProcessor)
+ *  - Approve via WhatsApp (LeaveInboundProcessor)
  *
  * Penting: finalisasi hanya boleh jalan sekali, di level terakhir.
  */

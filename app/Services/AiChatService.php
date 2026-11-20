@@ -656,20 +656,39 @@ class AiChatService
         }
 
         $rows = array_slice($rows, 0, $maxRows);
+
+        // R35: tabel dan grafik WAJIB memakai baris hasil query yang SAMA.
+        // Karena itu urutan baris ditentukan sekali di sini, lalu dipakai
+        // bersama oleh: tabel yang dirender sistem, grafik PNG, dan JSON yang
+        // dikirim ke penjawab. Sebelumnya tabel ditulis oleh model sedangkan
+        // grafik dirender server dari baris mentah, sehingga isinya bisa
+        // berbeda (pernah terjadi: 4 baris bergaji 5.000.000 tampil di grafik
+        // tetapi tidak ada di tabel).
+        $mintaChart = $this->mintaChart($userMessage);
+        $kolomChart = $this->perluChart($rows, $mintaChart, $userMessage)
+            ? $this->pilihKolomChart($rows, $userMessage)
+            : null;
+
+        if ($kolomChart !== null) {
+            $rows = $this->urutkanBarisTampilan($rows, $kolomChart);
+        }
+
+        $tabel = $this->siapkanTabel($rows);
         $rowsJson = json_encode($rows, JSON_UNESCAPED_UNICODE);
 
         // Grafik dibuat LEBIH DULU supaya prompt jawaban tahu bahwa grafiknya
         // sudah ada. Tanpa ini model bahasa selalu menolak dengan kalimat
         // "saya belum mendukung visualisasi chart" (persis jawaban yang
         // dikeluhkan user).
-        $mintaChart = $this->mintaChart($userMessage);
-        $chart = $this->siapkanChart($rows, $userMessage, $mintaChart);
+        $chart = $kolomChart === null
+            ? null
+            : $this->siapkanChart($rows, $userMessage, $mintaChart, $kolomChart);
 
         $answerSystemPrompt = 'Kamu adalah AI Assistant HRIS Chutex, asisten data untuk sistem HRIS Chutex. Berdasarkan data JSON hasil query database '
             . 'berikut, jawab pertanyaan user dalam bahasa Indonesia yang natural dan ringkas. Jika data kosong, katakan datanya '
             . 'tidak ditemukan. Jangan menyebutkan detail teknis (nama tabel/kolom SQL) kecuali user menanyakannya secara eksplisit. '
-            . 'Jika jawabanmu berupa daftar data dalam bentuk tabel, tulis tabelnya dalam format Markdown '
-            . '(| kolom | kolom | dengan baris pemisah |---|---|) supaya bisa dirender sebagai tabel di chat. '
+            . 'Tabel data sudah dirender otomatis oleh sistem di bawah jawabanmu, jadi JANGAN menulis ulang '
+            . 'daftar data itu dalam bentuk tabel Markdown dan jangan menyalin baris/angkanya — cukup ringkasan. '
             . 'Jika user meminta melakukan sesuatu di aplikasi HRIS — misalnya "ajukan cuti", "pengajuan cuti", "buka form cuti", '
             . '"lihat slip gaji", "slip payroll saya", "riwayat cuti saya", "cek saldo cuti" — sertakan link aksi yang relevan '
             . 'dalam format Markdown [teks link](URL) dengan URL absolut ke halaman terkait di aplikasi ini, mis.: '
@@ -708,6 +727,10 @@ class AiChatService
                 . 'bisa dibuat untuk data ini, lalu sajikan datanya sebagai tabel. Jangan mengarang grafik.';
         }
 
+        // R35: tabel dan grafik satu sumber. Instruksi ini juga melarang model
+        // menyusun tabelnya sendiri dari JSON (sumber perbedaan tabel vs grafik).
+        $answerSystemPrompt .= $this->instruksiTabelDanGrafik($chart, $tabel);
+
         // Riwayat juga dikirim ke penjawab. Tanpa ini, pertanyaan lanjutan
         // seperti "kenapa LINE 66 aktifnya 0?" dijawab dari nol — model tidak
         // tahu baris mana yang dimaksud dan menjawab seolah lupa.
@@ -745,6 +768,8 @@ class AiChatService
                 'row_count' => count($rows),
                 'export' => $export,
                 'chart' => $chart,
+                // R35: tabel dirender dari baris yang sama dengan grafik.
+                'table' => $tabel,
                 'links' => $links ?: null,
                 'rag_rules' => $sidikAturan,
             ], fn($value) => $value !== null),
@@ -2102,6 +2127,222 @@ class AiChatService
     }
 
     /* ---------------------------------------------------------------------
+     | Tabel jawaban (R35: satu sumber data dengan grafik)
+     |---------------------------------------------------------------------
+     | Sebelumnya tabel jawaban ditulis oleh model bahasa dari JSON hasil
+     | query, sedangkan grafiknya dirender server dari baris query yang sama.
+     | Karena penulisnya berbeda, isinya bisa berbeda pula (4 baris bergaji
+     | 5.000.000 tampil di grafik tetapi hilang dari tabel). Sekarang tabel
+     | dirender sistem dari baris yang persis sama dengan grafik.
+     */
+
+    /**
+     * Susun data tabel jawaban dari baris hasil query: label kolom yang enak
+     * dibaca + nilai yang sudah diformat. Dipakai frontend untuk merender
+     * tabel, dan dipakai grafik sebagai sumber baris yang sama.
+     *
+     * @param  array<int, mixed>  $rows
+     * @return array{kolom: array<int, array{key: string, label: string, uang: bool}>, baris: array<int, array<int, string>>, jumlah: int}|null
+     */
+    protected function siapkanTabel(array $rows): ?array
+    {
+        if ($rows === []) {
+            return null;
+        }
+
+        $headers = array_keys((array) $rows[0]);
+
+        if ($headers === []) {
+            return null;
+        }
+
+        $kolom = [];
+        foreach ($headers as $header) {
+            $kolom[] = [
+                'key' => (string) $header,
+                'label' => $this->labelTabel((string) $header),
+                'uang' => $this->kolomUang((string) $header),
+            ];
+        }
+
+        $baris = [];
+        foreach ($rows as $row) {
+            $isi = [];
+            foreach ($headers as $header) {
+                $isi[] = $this->formatNilaiTabel((string) $header, ((array) $row)[$header] ?? null);
+            }
+            $baris[] = $isi;
+        }
+
+        return [
+            'kolom' => $kolom,
+            'baris' => $baris,
+            'jumlah' => count($baris),
+        ];
+    }
+
+    /**
+     * Label kolom untuk tabel jawaban: nama teknis jadi bahasa manusia,
+     * kolom uang diberi satuan (Rp).
+     */
+    protected function labelTabel(string $kolom): string
+    {
+        $kunci = mb_strtolower(trim($kolom));
+        $khusus = [
+            'npk' => 'NPK', 'nik' => 'NIK', 'id' => 'ID', 'no' => 'No',
+            'is_staff' => 'Staff', 'is_expat' => 'Expat', 'is_active' => 'Aktif',
+        ];
+
+        if (isset($khusus[$kunci])) {
+            return $khusus[$kunci];
+        }
+
+        $teks = Str::title(str_replace('_', ' ', $kunci));
+        $teks = $this->gantiPola('/\s+/', ' ', $teks);
+
+        return $this->kolomUang($kolom) ? $teks . ' (Rp)' : $teks;
+    }
+
+    /**
+     * Kolom ini berisi uang? Dipakai untuk memformat ribuan dan memberi
+     * satuan Rp. Sengaja memakai daftar kata yang spesifik supaya kolom
+     * seperti "total_jam" atau "jumlah_hari" tidak salah diformat jadi uang.
+     */
+    protected function kolomUang(string $kolom): bool
+    {
+        $nama = mb_strtolower($kolom);
+
+        foreach ([
+            'salary', 'gaji', 'upah', 'allowance', 'tunjangan', 'pph', 'pajak',
+            'potongan', 'deduction', 'thp', 'take_home', 'takehome', 'insentif',
+            'bonus', 'nominal', 'biaya', 'harga', 'denda', 'total_payroll',
+            'total_salary', 'total_gaji', 'total_thp', 'total_tunjangan',
+            'total_pph', 'total_potongan', 'total_insentif', 'total_bonus',
+        ] as $kata) {
+            if (str_contains($nama, $kata)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Format satu sel tabel jawaban. Uang dan angka memakai pemisah ribuan
+     * gaya Indonesia supaya nilainya persis sama dengan yang dibaca grafik.
+     */
+    protected function formatNilaiTabel(string $kolom, $nilai): string
+    {
+        if ($nilai === null || $nilai === '') {
+            return '-';
+        }
+
+        if (is_bool($nilai)) {
+            return $nilai ? 'Ya' : 'Tidak';
+        }
+
+        if (is_numeric($nilai)) {
+            $angka = (float) $nilai;
+
+            if ($this->kolomUang($kolom) || floor($angka) === $angka) {
+                return number_format($angka, 0, ',', '.');
+            }
+
+            return number_format($angka, 2, ',', '.');
+        }
+
+        return $this->teksTabel($nilai);
+    }
+
+    /**
+     * Urutkan baris tampil SEKALI untuk tabel dan grafik.
+     *
+     * - Kolom label berupa waktu (periode/bulan/tanggal) → kronologis naik,
+     *   sesuai R34 untuk data tren.
+     * - Selain itu → nilai terbesar di atas (ranking), sama seperti grafik.
+     *
+     * Baris non-angka diletakkan di bawah supaya tidak menggeser baris yang
+     * benar-benar dipakai grafik.
+     *
+     * @param  array<int, mixed>  $rows
+     * @return array<int, mixed>
+     */
+    protected function urutkanBarisTampilan(array $rows, array $kolom): array
+    {
+        $kolomNilai = (string) ($kolom['nilai'] ?? '');
+        $kolomLabel = (string) ($kolom['label'] ?? '');
+
+        if ($kolomNilai === '') {
+            return array_values($rows);
+        }
+
+        $labelWaktu = ($kolom['waktu'] ?? false) || ($kolomLabel !== '' && $this->kolomAdalahWaktu($kolomLabel));
+
+        usort($rows, function ($a, $b) use ($kolomNilai, $kolomLabel, $labelWaktu) {
+            $barisA = (array) $a;
+            $barisB = (array) $b;
+
+            $nilaiA = $barisA[$kolomNilai] ?? null;
+            $nilaiB = $barisB[$kolomNilai] ?? null;
+
+            $angkaA = is_numeric($nilaiA);
+            $angkaB = is_numeric($nilaiB);
+
+            if (! $angkaA && ! $angkaB) {
+                return 0;
+            }
+
+            if (! $angkaA) {
+                return 1;
+            }
+
+            if (! $angkaB) {
+                return -1;
+            }
+
+            if ($labelWaktu) {
+                return $this->urutKronologis(
+                    $this->teksTabel($barisA[$kolomLabel] ?? ''),
+                    $this->teksTabel($barisB[$kolomLabel] ?? '')
+                );
+            }
+
+            return (float) $nilaiB <=> (float) $nilaiA;
+        });
+
+        return array_values($rows);
+    }
+
+    /**
+     * Instruksi prompt: tabel jawaban dirender sistem, bukan oleh model.
+     * Tanpa instruksi ini model menulis tabelnya sendiri dari JSON dan isinya
+     * bisa berbeda dengan grafik (R35).
+     */
+    protected function instruksiTabelDanGrafik(?array $chart, ?array $tabel): string
+    {
+        if ($tabel === null) {
+            return '';
+        }
+
+        $jumlah = (int) ($tabel['jumlah'] ?? 0);
+
+        $teks = "\n\nTABEL DATA SUDAH DIRENDER OTOMATIS oleh sistem di bawah jawabanmu, dari "
+            . $jumlah . ' baris hasil query yang sama dengan grafik. '
+            . 'DILARANG menulis ulang tabel data itu dalam bentuk tabel Markdown (jangan menyalin baris/angka), '
+            . 'karena salinan itu mudah berbeda dengan tabel aslinya. '
+            . 'Tulis ringkasan 2-6 kalimat saja: nilai tertinggi/terendah, total, dan pola penting. '
+            . 'Semua angka WAJIB diambil dari data JSON di bawah; jangan mengarang dan jangan membulatkan sendiri.';
+
+        if ($chart !== null) {
+            $teks .= ' Grafik batang memakai baris tabel yang sama'
+                . (isset($chart['bar_count']) ? " ({$chart['bar_count']} baris pertama dari tabel)" : '')
+                . ' dengan nilai persis sama; jangan menyebut angka lain untuk grafik.';
+        }
+
+        return $teks;
+    }
+
+    /* ---------------------------------------------------------------------
      | Chart / grafik jawaban
      |---------------------------------------------------------------------
      | User sering minta data "dalam bentuk chart" dan model bahasa selalu
@@ -2469,13 +2710,13 @@ class AiChatService
      *
      * @return array<string, mixed>|null
      */
-    protected function siapkanChart(array $rows, string $userMessage, bool $diminta): ?array
+    protected function siapkanChart(array $rows, string $userMessage, bool $diminta, ?array $kolom = null): ?array
     {
         if (! $this->perluChart($rows, $diminta, $userMessage)) {
             return null;
         }
 
-        $kolom = $this->pilihKolomChart($rows, $userMessage);
+        $kolom = $kolom ?? $this->pilihKolomChart($rows, $userMessage);
 
         if ($kolom === null) {
             return null;
@@ -2501,19 +2742,28 @@ class AiChatService
 
         Storage::disk($disk)->put($path, $png);
 
-        $dipakai = array_slice($rows, 0, max(3, (int) config('chatbot.chart_max_bars', 12)));
+        // R35: jumlah batang yang dipakai WAJIB sama dengan yang benar-benar
+        // digambar (baris tanpa angka tidak menjadi batang), supaya keterangan
+        // "grafik memakai N baris pertama tabel" bisa dicocokkan user.
+        $dipakai = count($this->dataChart($rows, $kolom['label'], $kolom['nilai'], $kolom['waktu'] ?? false));
 
         return [
             'type' => ($kolom['waktu'] ?? false) ? 'bar_waktu' : 'bar',
             'filename' => $filename,
             'url' => $this->urlExport($disk, $path, $filename),
             'row_count' => count($rows),
-            'bar_count' => count($dipakai),
+            'bar_count' => $dipakai,
             'label_kolom' => $kolom['label'],
             'nilai_kolom' => $kolom['nilai'],
             'satuan' => $kolom['satuan'],
             'waktu' => (bool) ($kolom['waktu'] ?? false),
             'otomatis' => ! $diminta,
+            // R35: grafik selalu menyebut berapa baris tabel yang dipakai,
+            // supaya user bisa mencocokkan grafik dengan tabelnya sendiri.
+            'baris_tabel' => count($rows),
+            'catatan' => count($rows) > $dipakai
+                ? 'Grafik memakai ' . $dipakai . ' baris pertama dari tabel (' . count($rows) . ' baris), urutan dan nilainya sama.'
+                : 'Grafik memakai seluruh ' . $dipakai . ' baris tabel, urutan dan nilainya sama.',
         ];
     }
 
@@ -2576,6 +2826,50 @@ class AiChatService
     }
 
     /**
+     * Data batang grafik (R35): SATU batang per baris tabel, nilai apa adanya.
+     *
+     * Tidak ada agregasi (penjumlahan label kembar) dan tidak ada pengurutan
+     * ulang berdasarkan nilai — keduanya dulu membuat angka grafik berbeda
+     * dari angka tabel. Urutan baris ditetapkan sekali di
+     * urutkanBarisTampilan() dan dipakai bersama tabel; di sini hanya
+     * diurutkan kronologis bila labelnya berupa waktu (R34) dan dipotong
+     * sebanyak `chatbot.chart_max_bars`.
+     *
+     * @param  array<int, mixed>  $rows
+     * @return array<int, array{label: string, nilai: float}>
+     */
+    protected function dataChart(array $rows, string $kolomLabel, string $kolomNilai, bool $labelWaktu = false): array
+    {
+        $data = [];
+
+        foreach ($rows as $row) {
+            $baris = (array) $row;
+            $nilaiMentah = $baris[$kolomNilai] ?? null;
+
+            if (! is_numeric($nilaiMentah)) {
+                continue;
+            }
+
+            $label = $this->teksTabel($baris[$kolomLabel] ?? '-');
+            if (mb_strlen($label) > 30) {
+                $label = mb_substr($label, 0, 27) . '...';
+            }
+
+            $data[] = ['label' => $label, 'nilai' => (float) $nilaiMentah];
+        }
+
+        if ($data === []) {
+            return [];
+        }
+
+        if ($labelWaktu || ($kolomLabel !== '' && $this->kolomAdalahWaktu($kolomLabel))) {
+            usort($data, fn ($a, $b) => $this->urutKronologis($a['label'], $b['label']));
+        }
+
+        return array_slice($data, 0, max(3, (int) config('chatbot.chart_max_bars', 12)));
+    }
+
+    /**
      * Gambar grafik batang horizontal (PNG) memakai GD.
      * Mengembalikan null kalau GD atau font TTF tidak tersedia.
      *
@@ -2593,78 +2887,21 @@ class AiChatService
             return null;
         }
 
-        // Kumpulkan pasangan label → nilai (hanya baris yang nilainya angka).
-        // Jika ada label yang berulang (misal nama karyawan muncul di beberapa
-        // tanggal/kejadian), agregasikan (jumlahkan nilai metriknya) agar
-        // setiap batang mewakili 1 entitas unik dan tidak terduplikasi.
-        $agregat = [];
-        foreach ($rows as $row) {
-            $baris = (array) $row;
-            $nilaiMentah = $baris[$kolomNilai] ?? null;
+        $data = $this->dataChart($rows, $kolomLabel, $kolomNilai, $labelWaktu);
 
-            if (! is_numeric($nilaiMentah)) {
-                continue;
-            }
-
-            $label = $this->teksTabel($baris[$kolomLabel] ?? '-');
-            if (mb_strlen($label) > 30) {
-                $label = mb_substr($label, 0, 27) . '...';
-            }
-
-            $nilai = (float) $nilaiMentah;
-
-            if (! isset($agregat[$label])) {
-                $agregat[$label] = [
-                    'label' => $label,
-                    'nilai' => $nilai,
-                    'count' => 1,
-                ];
-            } else {
-                // Untuk persentase / rasio gunakan rata-rata, untuk metrik lain (jam, jumlah) gunakan SUM
-                if ($satuan === '%') {
-                    $agregat[$label]['nilai'] += $nilai;
-                    $agregat[$label]['count']++;
-                } else {
-                    $agregat[$label]['nilai'] += $nilai;
-                    $agregat[$label]['count']++;
-                }
-            }
-        }
-
-        if (empty($agregat)) {
+        if (empty($data)) {
             return null;
         }
 
-        $data = [];
-        foreach ($agregat as $item) {
-            if ($satuan === '%' && $item['count'] > 1) {
-                $item['nilai'] = round($item['nilai'] / $item['count'], 2);
-            }
-            $data[] = ['label' => $item['label'], 'nilai' => $item['nilai']];
-        }
-
-        // R34: grafik batang WAJIB punya minimal 2 kategori pembanding yang
-        // nilainya berbeda. Kalau hasil agregasi hanya menyisakan 1 kategori
-        // (kolom label konstan, mis. status yang sama di semua baris),
-        // JANGAN render grafik statis — kembalikan null supaya jawaban cukup
-        // tabel + ringkasan teks.
+        // R34: grafik batang WAJIB punya minimal 2 kategori pembanding. Kalau
+        // hanya tersisa 1 baris angka, JANGAN render grafik statis —
+        // kembalikan null supaya jawaban cukup tabel + ringkasan teks.
         if (count($data) < 2) {
             return null;
         }
 
-        // R34: deteksi apakah label bersifat deret waktu / kronologis.
-        // Kalau kolom label mengandung periode/bulan/tanggal/tahun, urutkan
-        // KRONOLOGIS (naik), jangan di-sort descending berdasarkan nilai.
+        // R34: label waktu sudah diurutkan kronologis oleh dataChart().
         $labelWaktu = $labelWaktu || $this->kolomAdalahWaktu($kolomLabel);
-
-        if ($labelWaktu) {
-            usort($data, fn ($a, $b) => $this->urutKronologis($a['label'], $b['label']));
-        } else {
-            usort($data, fn ($a, $b) => $b['nilai'] <=> $a['nilai']);
-        }
-
-        $maksBar = max(3, (int) config('chatbot.chart_max_bars', 12));
-        $data = array_slice($data, 0, $maksBar);
 
         // Bila data deret waktu dan semua kategori nilainya IDENTIK (mis. tren
         // datar), tetap tampilkan — tapi urutannya tetap kronologis, bukan

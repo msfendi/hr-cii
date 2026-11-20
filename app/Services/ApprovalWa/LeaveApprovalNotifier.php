@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
  * Dipanggil dari:
  *  - PengajuanCutiController::store()  → setelah pengajuan baru dibuat
  *  - LeaveApprovalController::approve() → setelah level N approve
- *  - InboundApprovalProcessor::handle() → setelah approve via WhatsApp
+ *  - LeaveInboundProcessor::handle() → setelah approve via WhatsApp
  *  - Artisan command approval:notify-token (testing manual)
  *
  * Aturan: hanya level yang "giliran" yang dikabari.
@@ -66,7 +66,7 @@ class LeaveApprovalNotifier
             return $result;
         }
 
-        $message = WaMessageFormatter::formatApprovalRequest($row, $approverInfo);
+        $message = LeaveMessageFormatter::formatApprovalRequest($row, $approverInfo);
 
         if ($dryRun) {
             Log::info("[ApprovalNotifier] DRY RUN #$requestId → $phone (level $level)");
@@ -124,7 +124,7 @@ class LeaveApprovalNotifier
         }
 
         $id      = (int) $row->id;
-        $message = WaMessageFormatter::formatApprovalRequest($row, $approverInfo);
+        $message = LeaveMessageFormatter::formatApprovalRequest($row, $approverInfo);
 
         return [
             'request_id'      => $id,
@@ -145,8 +145,8 @@ class LeaveApprovalNotifier
             'duration_days'   => (int) $row->total_days,
             'reason'          => $row->reason,
             'message'         => $message,
-            'approve_command' => "/approve $id",
-            'reject_command'  => "/tolak $id <alasan>",
+            'approve_command' => "/approve-cuti$id",
+            'reject_command'  => "/tolak-cuti$id <alasan>",
         ];
     }
 

@@ -6,11 +6,12 @@
 
 | Atribut | Nilai |
 |---|---|
-| Versi dokumen | 1.4 — dibuat 16 November 2026, diperbarui 19 November 2026 |
+| Versi dokumen | 1.5 — dibuat 16 November 2026, diperbarui 20 November 2026 |
 | Perubahan 1.1 | Resep kehadiran berbasis roster shift (R24) menggantikan MIN/MAX tap; tabel audit dilarang dipakai (R25) |
 | Perubahan 1.2 | Batas maksimal lembur (R31): 4 jam/hari dan 18 jam/minggu untuk hari kerja; lembur pada istirahat Sabtu/Minggu dan/atau hari libur resmi tidak dihitung |
 | Perubahan 1.3 | Blocklist tabel/kolom pindah ke dokumen ini (R32 + Bagian 6c, tidak lagi dari `.env`); guard data payroll per `role_payrolls` (R33) |
 | Perubahan 1.4 | R34 diperluas: grafik wajib dinamis mengikuti dimensi query (periode/waktu, departemen, jenis kelamin, jabatan), larangan grafik 1 batang statis, pemilihan tipe chart yang adaptif (garis/tren vs batang perbandingan vs proporsi), larangan memplot kolom status konstan sebagai kategori |
+| Perubahan 1.5 | R35: tabel dan grafik wajib satu sumber data (tabel dirender sistem dari baris yang sama, satu baris = satu batang, grafik = baris pertama tabel). R36: sumber gaji — rekap payroll bulan/range → `payroll_run_details`, "gaji" saja → `employees_contract` |
 | Sumber skema | dump `CII.sql` (Navicat, 12 Nov 2026 15:30) dari server `MSCHUTEX` |
 | Verifikasi nilai | koneksi read-only langsung ke database CII, 16 Nov 2026 |
 | Versi SQL Server | 12.0.6024.0 (SQL Server 2014) |
@@ -34,7 +35,7 @@
 - Lembur: **`overtimes`** (operasional) vs **`overtimes_payroll`** (payroll). Jangan dicampur.
 - Batas lembur: **maksimal 4 jam/hari dan 18 jam/minggu** untuk hari kerja; lembur pada waktu istirahat Sabtu/Minggu dan/atau hari libur resmi **tidak dihitung** (R31).
 - Departemen: **`DEPT`**, kolom nama **`DEPARTEMENT`**, kunci **`ID_DEPT`**.
-- Gaji: **`payroll_run_details`**, kolom karyawan **`employee_npk`** — tetapi **akses read-only ditolak**.
+- Gaji: **rekap payroll (bulan/range)** → `payroll_run_details` (⋈ `payroll_runs` ⋈ `payroll_periods`); **"gaji" saja** (gaji karyawan, gaji pokok, gaji harian) → `employees_contract` (`salary`, `daily_salary`, `allowance`, `pph21`) (R36). Selalu sebut sumbernya; `payroll_run_details_audit` dilarang.
 - 24 tabel **menolak `SELECT *`** (lihat Bagian 6). Penolakan bersifat per kolom: `PKWT` tetap bisa
   dibaca dengan kolom eksplisit. Itu batas akses, bukan tabel hilang.
 - SQL Server 2014: **tanpa** `TRIM`, `STRING_SPLIT`, `CONCAT_WS`, `OPENJSON`.
@@ -44,8 +45,9 @@
 - Blocklist tabel/kolom untuk chatbot ada di **Bagian 6c** dokumen ini (R32) — bukan lagi di `.env`.
 - Pertanyaan **payroll/gaji/kompensasi/pinalty** wajib dicek dulu ke **`role_payrolls.payroll_role`**; di luar cakupan role → **tolak** dan sebutkan cakupannya (R33).
 - Visualisasi/grafik wajib mengikuti dimensi query nyata (waktu/kategori) dan jenis data; dilarang grafik 1 batang statis / kolom status seragam; gaya disesuaikan: tren = garis/vertikal urut waktu, perbandingan = bar ranking, komposisi = donut/pie (R34).
+- Tabel dan grafik pada satu jawaban **wajib satu sumber data**: tabel dirender sistem dari baris hasil query yang sama, satu baris tabel = satu batang, grafik memakai baris pertama tabel dan wajib menyebut "grafik memakai N baris pertama dari M baris tabel" bila tabel lebih panjang (R35).
 
-## 1. ATURAN WAJIB (R1–R33)
+## 1. ATURAN WAJIB (R1–R36)
 
 Aturan berikut bersifat mengikat. Bila satu aturan bertentangan dengan kebiasaan umum SQL,
 **aturan di dokumen ini yang menang**, karena disusun dari data nyata database CII.
@@ -393,6 +395,59 @@ Pernah terjadi:
      yang sedang berlangsung (tidak menampilkan gambar/agregat dari query sebelumnya), jumlah batang/titik
      cocok dengan jumlah baris yang relevan di tabel, dan label kategori mencerminkan pembeda utama data.
 
+### R35. TABEL DAN GRAFIK WAJIB SATU SUMBER DATA — grafik mengikuti tabel.
+
+**Kenapa:** pada jawaban 20 November 2026, tabel menampilkan 13 baris sedangkan grafik di bawahnya
+menampilkan 12 batang yang **tidak sama**, termasuk 4 karyawan bergaji `5.000.000` yang tidak ada
+satu pun di tabel. Akarnya: tabel disusun model bahasa dari JSON hasil query (bisa terpotong,
+diringkas, atau diurut ulang sendiri), sementara grafik dirender sistem dari baris mentah.
+
+**Aturan:**
+1. Tabel data pada jawaban **wajib dirender sistem** dari baris hasil query yang sama dengan grafik.
+   **Dilarang** meminta model bahasa menyusun ulang tabel Markdown dari JSON — itulah sumber
+   perbedaan angka.
+2. Urutan baris ditetapkan **sekali** (ranking tertinggi→terendah, atau kronologis untuk deret waktu
+   menurut R34) lalu dipakai bersama oleh tabel dan grafik.
+3. Grafik memakai **baris pertama tabel** (batas `chart_max_bars`, bawaan 12). Bila tabel lebih panjang
+   dari jumlah batang, keterangan "grafik memakai N baris pertama dari M baris tabel" **wajib**
+   ditampilkan. Grafik **tidak boleh** memakai baris di luar tabel.
+4. **Satu baris tabel = tepat satu batang.** Dilarang mengagregasi (menjumlahkan) label kembar dan
+   dilarang mengurutkan ulang grafik berdasarkan nilai. Bila satu nama muncul dua baris, tampil dua batang.
+5. Nilai tiap batang **wajib sama persis** dengan sel tabel pada baris yang sama (pemisah ribuan
+   diabaikan saat membandingkan). Model bahasa dilarang menulis ulang atau membulatkan angka tabel.
+6. Bila jumlah data terlalu banyak untuk grafik, **potong di ujung tabel**, jangan angka-angka tabel
+   dipadatkan agar cocok dengan grafik.
+
+**Verifikasi:** bandingkan label dan nilai batang ke-i dengan baris ke-i tabel. Bila berbeda,
+perbaiki **sumber datanya** (jangan menyunting gambar grafiknya).
+
+### R36. SUMBER GAJI: rekap payroll (bulan/range) → `payroll_run_details`; "gaji" saja → `employees_contract`.
+
+**Kenapa:** dua pertanyaan yang mirip memerlukan tabel berbeda. "Rekap gaji payroll Agustus 2026" adalah
+data payroll yang sudah dihitung dan disimpan per run/periode; "gaji Ririn" adalah gaji pokok pada
+kontrak berjalan.
+
+**Aturan:**
+1. Pertanyaan yang menyebut **rekap payroll / total payroll / gaji satu bulan tertentu / beberapa bulan
+   (range) / tren gaji per periode** → pakai **`payroll_run_details`**
+   (⋈ `payroll_runs` ⋈ `payroll_periods`): `employee_npk`, `employee_name`, komponen `components` (JSON),
+   total per karyawan `total_salary`, total periode `payroll_runs.total_payroll`, jumlah karyawan
+   `payroll_runs.employee_count`. Batasi periode lewat `payroll_periods.start_date`/`end_date`
+   (periode = bulan kalender penuh), contoh: `pp.start_date >= '2026-08-01' AND pp.end_date <= '2026-08-31'`.
+   Untuk range: `pp.start_date >= '<awal>' AND pp.end_date <= '<akhir>'`.
+2. Pertanyaan **"gaji" saja** — gaji karyawan X, daftar gaji pokok, gaji harian, tunjangan, PPh 21 —
+   **tanpa** menyebut rekap/payroll/periode/bulan → pakai **`employees_contract`**: `npk`, `salary`
+   (gaji pokok bulanan), `daily_salary` (gaji harian), `allowance`, `pph21`.
+3. Setiap jawaban wajib menyebut sumbernya (R20): "Sumber: `employees_contract.salary`" atau
+   "Sumber: `payroll_run_details.total_salary` (periode Agustus 2026)". Jangan mencampur dua sumber
+   dalam satu jawaban tanpa menyebut mana yang dipakai untuk angka mana.
+4. Satu karyawan bisa punya **lebih dari satu baris kontrak** di `employees_contract` (perpanjangan).
+   Ambil kontrak yang berlaku pada periode yang ditanyakan (`start_date <= akhir AND end_date >= awal`),
+   lalu yang terbaru (`start_date` terbesar / `contract_ke` terbesar). **Jangan menjumlahkan** lintas kontrak.
+5. `payroll_run_details_audit` tetap **dilarang** (R25). Guard R33/R33.1 tetap berlaku: kolom gaji hanya
+   untuk role payroll terdaftar, `file_contract` tetap tertutup untuk semua role, dan permintaan di luar
+   cakupan role **ditolak** dengan menyebut cakupannya.
+
 ## 2. PETA KEPUTUSAN: PERTANYAAN → TABEL → KOLOM → JOIN
 
 Gunakan tabel ini untuk memilih tabel. Kolom join di sini sudah diverifikasi.
@@ -408,7 +463,8 @@ Kalau pertanyaan tidak ada di daftar, cari tabelnya di Bagian 5 berdasarkan doma
 | Lembur per karyawan/periode | `overtimes` (operasional) atau `overtimes_payroll` (payroll) | rentang `OVERTIME_DATE` + `TRY_CAST(JUMLAH_JAM_LEMBUR AS DECIMAL) IS NOT NULL` | `overtimes.NPK = BIODATA.NPK` | Wajib buang kode huruf dan baris bertanggal masa depan. |
 | Batas/kepatuhan jam lembur (4 jam/hari, 18 jam/minggu) | `overtimes` + `holidays` | rentang `OVERTIME_DATE`; hanya hari kerja (bukan Sabtu/Minggu, bukan `holidays.holiday_date`) | `overtimes.NPK = BIODATA.NPK`; anti-join `holidays.holiday_date = OVERTIME_DATE` | Butuh dua level: harian (`> 4`) dan mingguan Senin–Minggu (`> 18`). Lembur hari istirahat/libur resmi TIDAK dihitung (R31). |
 | Cuti/izin | `leave_requests` + `leave_types` + `BIODATA` | `status='approved'`, rentang tanggal | `leave_requests.leave_type_id = leave_types.id`; `leave_requests.npk = BIODATA.NPK` | Status huruf kecil. |
-| Gaji/slip per karyawan | `payroll_run_details` + `payroll_runs` + `payroll_periods` | `payroll_run_details.employee_npk`; `payroll_periods.is_closed = 1` | `run_id = payroll_runs.id`; `payroll_runs.period_id = payroll_periods.id` | Akses akun read-only ditolak → sampaikan tidak bisa diakses, jangan mengarang angka. |
+| Gaji karyawan (bulan/range), rekap payroll, slip per karyawan | `payroll_run_details` + `payroll_runs` + `payroll_periods` | `payroll_run_details.employee_npk`, `total_salary`, `components`; batasi `payroll_periods.start_date`/`end_date` | `run_id = payroll_runs.id`; `payroll_runs.period_id = payroll_periods.id` | R36: pertanyaan **rekap/payroll/per bulan/range** ke sini. Wajib sebut sumber. `payroll_run_details_audit` dilarang (R25). Resep 8. |
+| Gaji pokok / gaji harian / tunjangan / PPh 21 karyawan ("gaji" saja) | `employees_contract` | `npk`, `salary`, `daily_salary`, `allowance`, `pph21` | `employees_contract.npk = BIODATA.NPK` | R36: pertanyaan **gaji saja tanpa rekap/periode** ke sini. Pilih kontrak berlaku (`start_date <= akhir AND end_date >= awal`) lalu terbaru; jangan jumlahkan lintas kontrak. Kolom gaji hanya untuk role payroll (R33.1). Resep 8. |
 | Departemen & jumlah karyawan per dept | `DEPT` + `BIODATA` | `BIODATA.STATUS='A'` | `BIODATA.ID_DEPT = DEPT.ID_DEPT` | Nama dept di `DEPT.DEPARTEMENT`. `DEPT.SECTION` selalu 'CHUTEX'. |
 | Turnover karyawan per departemen/line/factory per periode | `PKWT` + `BIODATA` + `BIODATA_KELUAR` + `DEPT` | `PKWT.TMK` (masuk) / `PKWT.TKK` (keluar) dalam periode; aktif `BIODATA.STATUS='A'` | `PKWT.NPK = BIODATA.NPK` atau `= BIODATA_KELUAR.NPK`; `ID_DEPT = DEPT.ID_DEPT` | Turnover % = keluar/aktif×100 (R27). Factory dari nomor line di `DEPARTEMENT` (R28). Top N = agregasi per unit (R29). Resep 6. |
 | Turnover per factory (LINE 1–42 vs 43–84) | sama seperti turnover | sama | sama | Hanya 3 baris: Factory 1, Factory 2, Lainnya (R28). Jangan tampilkan baris LINE mentah kalau yang diminta per departemen (R29). |
@@ -822,6 +878,11 @@ bukan 0%. Sebutkan `employee_mutations` kalau perlu memastikan ada perpindahan.
 | Menjawab "saya tidak punya riwayat/konteks" pada pertanyaan lanjutan | mengulang pekerjaan user; jawaban tidak nyambung | pakai riwayat + query terakhir (R26) |
 | Menyebut QC/PACKING/IRONING sebagai "Factory 1/2" | departemen non-line bukan bagian dari line | `Lainnya` (R28) |
 | Mengelompokkan rekap payroll bulanan hanya berdasarkan `status` atau konstanta 1 baris | menghasilkan grafik statis 1 batang `Payroll calculation completed` | kelompokkan per `payroll_periods.name` / waktu kronologis (R34, Resep 7) |
+| Tabel jawaban disusun model bahasa dari JSON sementara grafik dirender server dari baris mentah | angka tabel dan grafik berbeda (kasus 20 Nov 2026: 4 baris gaji `5.000.000` ada di grafik, hilang dari tabel) | tabel **wajib dirender sistem** dari baris yang sama; satu baris tabel = satu batang; grafik = baris pertama tabel (R35, Resep 8) |
+| Mengagregasi label kembar atau mengurutkan ulang grafik berdasarkan nilai | nilai batang tidak lagi sama dengan sel tabel | satu baris tabel = satu batang, urutan ditetapkan sekali sebelum tabel & grafik dibuat (R35) |
+| Menjawab "rekap gaji payroll Agustus 2026" dari `employees_contract.salary` | itu gaji kontrak berjalan, bukan hasil payroll periode itu — komponen/lembur tidak ikut | `payroll_run_details` + `payroll_runs` + `payroll_periods` dibatasi rentang periode (R36, Resep 8) |
+| Menjawab "gaji karyawan X" dari `payroll_run_details` tanpa menyebut periode | mengambil periode lain (atau kosong bila payroll belum digenerate) dan disajikan seolah gaji pokok | `employees_contract.salary` / `daily_salary` untuk pertanyaan gaji saja, sebut sumbernya (R36, Resep 8) |
+| Menjumlahkan beberapa baris kontrak karyawan yang sama di `employees_contract` | gaji berlipat karena perpanjangan kontrak dihitung dua kali | pilih kontrak yang berlaku pada periode ditanyakan, lalu yang terbaru (R36) |
 | Menampilkan grafik batang ranking yang di-sort acak/descending untuk data deret waktu | tren kronologis terbalik (Oktober muncul di atas Juni) | urutkan kronologis `start_date ASC` untuk tren waktu (R34) |
 
 ### 2.8 RESEP 7 — Rekap Tren Payroll per Bulan / Periode (R34)
@@ -848,6 +909,69 @@ ORDER BY pp.start_date ASC;
 - Karena data berbentuk **deret waktu (tren bulanan)**, sumbu kategori **wajib** memakai `PERIODE` (atau `TANGGAL_MULAI`), **bukan** `STATUS`.
 - Urutan data harus **kronologis (Januari → Desember / Juni → Oktober)**, bukan di-sort descending berdasarkan nilai nominal tertinggi.
 - Kolom metrik yang diplot adalah `TOTAL_PAYROLL` (atau `JUMLAH_KARYAWAN`), bukan `STATUS`.
+
+### 2.9 RESEP 8 — Gaji karyawan: `payroll_run_details` vs `employees_contract` (R35–R36)
+
+Dua pertanyaan berikut mirip tetapi **berbeda tabel**. Pilih sesuai kata kunci pertanyaan.
+
+**(a) Rekap payroll bulan tertentu / range bulan / "gaji payroll Agustus"** → `payroll_run_details`
+
+```sql
+-- Rekap gaji karyawan untuk satu bulan penuh (contoh: Agustus 2026)
+SELECT
+    prd.employee_npk AS NPK,
+    prd.employee_name AS NAMA_KARYAWAN,
+    prd.employee_dept AS DEPARTEMEN,
+    prd.total_salary AS TOTAL_GAJI,
+    pp.name AS PERIODE
+FROM dbo.payroll_run_details prd
+JOIN dbo.payroll_runs pr    ON pr.id = prd.run_id
+JOIN dbo.payroll_periods pp ON pp.id = pr.period_id
+WHERE pp.start_date >= '2026-08-01'
+  AND pp.end_date   <= '2026-08-31'
+ORDER BY prd.total_salary DESC;
+```
+
+```sql
+-- Rekap payroll beberapa bulan (range): Juni - Oktober 2026, per periode
+SELECT
+    pp.name AS PERIODE,
+    COUNT(prd.id) AS JUMLAH_KARYAWAN,
+    SUM(prd.total_salary) AS TOTAL_GAJI
+FROM dbo.payroll_run_details prd
+JOIN dbo.payroll_runs pr    ON pr.id = prd.run_id
+JOIN dbo.payroll_periods pp ON pp.id = pr.period_id
+WHERE pp.start_date >= '2026-06-01'
+  AND pp.end_date   <= '2026-10-31'
+GROUP BY pp.name, pp.start_date
+ORDER BY pp.start_date ASC;   -- kronologis (R34)
+```
+
+**(b) "Gaji" saja — gaji karyawan X, daftar gaji pokok, gaji harian, tunjangan, PPh 21** → `employees_contract`
+
+```sql
+SELECT
+    ec.npk AS NPK,
+    b.NAMA AS NAMA_KARYAWAN,
+    ec.salary AS GAJI_POKOK,
+    ec.daily_salary AS GAJI_HARIAN,
+    ec.allowance AS TUNJANGAN,
+    ec.pph21 AS PPH21,
+    ec.start_date AS KONTRAK_MULAI,
+    ec.end_date AS KONTRAK_SELESAI
+FROM dbo.employees_contract ec
+JOIN dbo.BIODATA b ON b.NPK = ec.npk
+WHERE b.STATUS = 'A'
+  AND ec.start_date <= CAST(GETDATE() AS date)      -- kontrak yang berlaku
+  AND (ec.end_date IS NULL OR ec.end_date >= CAST(GETDATE() AS date))
+ORDER BY ec.salary DESC;
+```
+
+**Catatan wajib:**
+- Setiap jawaban **menyebut sumbernya** (R20): `employees_contract.salary` atau `payroll_run_details.total_salary` + nama periode.
+- `employees_contract` bisa berisi beberapa kontrak per karyawan; ambil yang berlaku lalu terbaru, **jangan dijumlahkan** (R36 butir 4).
+- Kolom gaji hanya untuk role payroll terdaftar; di luar cakupan → tolak dan sebut cakupannya (R33/R33.1).
+- **Tabel dan grafik memakai baris hasil query yang sama** (R35): satu baris tabel = satu batang, grafik mengambil baris pertama tabel, dan bila tabel lebih panjang tuliskan "grafik memakai N baris pertama dari M baris tabel".
 
 ## 3. KAMUS NILAI (arti kode yang tersimpan)
 
