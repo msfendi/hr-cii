@@ -52,6 +52,7 @@ class EmployeesContractController extends Controller
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
         $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
         $roleHRD = $user ? $user->hasRole('HRD') : false;
+        $roleAudit = $user ? $user->hasRole('Audit') : false;
 
         $query = DB::table('employees_contract as c')
             ->join('BIODATA as b', 'b.NPK', '=', 'c.npk')
@@ -79,8 +80,11 @@ class EmployeesContractController extends Controller
 
         // ── Role-based filtering ──────────────────────────────────────────────
         if (!$roleAdmin) {
-            $query->where(function ($q) use ($roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll, $roleHRD) {
+            $query->where(function ($q) use ($roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll, $roleHRD, $roleAudit) {
                 if ($rolePayrollAll) {
+                    $q;
+                }
+                if ($roleAudit) {
                     $q;
                 }
                 if ($roleStaff) {
@@ -103,7 +107,7 @@ class EmployeesContractController extends Controller
                     });
                 }
                 // Jika tidak punya akses sama sekali, filter habis
-                if (!$roleStaff && !$roleNonStaff && !$roleSewing && !$roleNonSewing && !$rolePayrollAll && !$roleHRD) {
+                if (!$roleStaff && !$roleNonStaff && !$roleSewing && !$roleNonSewing && !$rolePayrollAll && !$roleHRD && !$roleAudit) {
                     $q->whereRaw('1 = 0');
                 }
             });
@@ -154,7 +158,7 @@ class EmployeesContractController extends Controller
             CASE WHEN c.status_contract = 'AKTIF' THEN 0 ELSE 1 END
         ")->orderBy('c.end_date', 'asc')
             ->get()
-            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll, $roleHRD) {
+            ->map(function ($row) use ($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll, $roleHRD, $roleAudit) {
                 $sisa = (int) $row->sisa_hari;
                 $day  = (int) $row->end_day;
 
@@ -214,6 +218,7 @@ class EmployeesContractController extends Controller
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
         $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
         $roleHRD = $user ? $user->hasRole('HRD') : false;
+        $roleAudit = $user ? $user->hasRole('Audit') : false;
 
         $query = DB::table('employees_contract as c')
             ->join('BIODATA as b', 'b.NPK', '=', 'c.npk')
@@ -717,8 +722,9 @@ class EmployeesContractController extends Controller
         $roleSewing = $user ? $user->hasRole('Payroll_SEWING') : false;
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
         $roleHRD = $user ? $user->hasRole('HRD') : false;
+        $roleAudit = $user ? $user->hasRole('Audit') : false;
 
-        if (!$roleAdmin && !$rolePayrollAll && !$roleHRD) {
+        if (!$roleAdmin && !$rolePayrollAll && !$roleHRD && !$roleAudit) {
             $biodata = DB::table('BIODATA as b')
                 ->leftJoin('DEPT as d', 'd.ID_DEPT', '=', 'b.ID_DEPT')
                 ->select('b.IS_STAFF', 'd.IS_SEWING')
@@ -869,11 +875,12 @@ class EmployeesContractController extends Controller
         $roleNonSewing = $user ? $user->hasRole('Payroll_NONSEWING') : false;
         $rolePayrollAll = $user ? $user->hasRole('Management Payroll') : false;
         $roleHRD = $user ? $user->hasRole('HRD') : false;
+        $roleAudit = $user ? $user->hasRole('Audit') : false;
 
         $filename = 'semua-kontrak_' . date('Ymd_His') . '.xlsx';
 
         return Excel::download(
-            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll, $roleHRD),
+            new EmployeesContractAllExport($roleAdmin, $roleStaff, $roleNonStaff, $roleSewing, $roleNonSewing, $rolePayrollAll, $roleHRD, $roleAudit),
             $filename
         );
     }
