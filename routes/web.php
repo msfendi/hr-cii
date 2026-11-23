@@ -190,6 +190,12 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/home/turnover', [HomeController::class, 'getTurnover'])->name('home.turnover')->middleware(['auth', 'permission']);
     Route::get('/logout', [LoginController::class, 'logout'])->name('logout');
 
+    // Multi-cabang: pindah konteks cabang aktif (K5)
+    Route::post('/company/switch', [\App\Http\Controllers\CompanySwitchController::class, 'switch'])->name('company.switch');
+
+    // Multi-cabang: laporan konsolidasi lintas cabang (F6)
+    Route::get('/reports/multi-company', [\App\Http\Controllers\CompanyReportController::class, 'index'])->name('reports.multi-company');
+
     //Register
     Route::get('/register/create', [RegisterController::class, 'create'])->name('register.create')->middleware(['auth', 'permission']);
     Route::post('/register', [RegisterController::class, 'storeAuth'])->name('register')->middleware(['auth', 'permission']);
@@ -1009,6 +1015,9 @@ Route::group(['middleware' => 'auth'], function () {
 
     Route::prefix('health-test')->group(function () {
         Route::get('/', [HealthTestController::class, 'index'])->name('health-test.index');
+        Route::get('/{id}/detail', [HealthTestController::class, 'show'])
+            ->name('health-test.detail')
+            ->middleware(['auth', 'permission']);
         Route::get('/create', [HealthTestController::class, 'create'])->name('health-test.create');
         Route::post('/store', [HealthTestController::class, 'store'])->name('health-test.store');
         Route::get('/delete/{id}', [HealthTestController::class, 'delete'])->name('health-test.delete');

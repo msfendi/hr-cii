@@ -12,21 +12,120 @@ use RealRashid\SweetAlert\Facades\Alert;
 
 class HealthTestController extends Controller
 {
+    /**
+     * Daftar Health Test.
+     *
+     * Perbaikan 2026-11-23 (baris ganda): join langsung ke `pelamar` +
+     * `pelamar_details` mengalikan baris, karena
+     *   - NIK tidak unik di tabel `pelamar` (satu orang bisa melamar berkali-kali
+     *     dan setiap lamaran punya barisnya sendiri), dan
+     *   - satu baris `pelamar` bisa punya beberapa baris `pelamar_details`.
+     * Akibatnya satu Health Test bisa tampil 2-3 kali (mis. ID 284 dan 354).
+     *
+     * Sekarang nama pelamar dan surat sehat diambil sebagai subquery skalar,
+     * sedangkan syarat "punya surat sehat" dipertahankan lewat whereExists.
+     * Satu baris `health_tests` = satu baris tabel; isi dan urutan tetap sama.
+     */
     public function index()
     {
+        $namaPelamar = DB::table('pelamar as p')
+            ->select('p.NAMA as nama')
+            ->whereColumn('p.NIK', 'health_tests.nik')
+            ->orderBy('p.ID')
+            ->limit(1);
+
+        $fileSuratSehat = DB::table('pelamar_details as pd')
+            ->join('pelamar as p', 'p.ID', '=', 'pd.id_pelamar')
+            ->select('pd.file_surat_sehat as file_surat_sehat')
+            ->whereColumn('p.NIK', 'health_tests.nik')
+            ->whereNotNull('pd.file_surat_sehat')
+            ->orderBy('pd.ID')
+            ->limit(1);
+
         $data = HealthTest::query()
-            ->join('pelamar', 'pelamar.NIK', '=', 'health_tests.nik')
-            ->leftJoin('pelamar_details', 'pelamar_details.id_pelamar', '=', 'pelamar.id')
-            ->select(
-                'health_tests.*',
-                'pelamar.NAMA as nama',
-                'pelamar_details.file_surat_sehat'
-            )
-            ->whereNotNull('pelamar_details.file_surat_sehat')
+            ->select('health_tests.*')
+            ->addSelect([
+                'nama' => $namaPelamar,
+                'file_surat_sehat' => $fileSuratSehat,
+            ])
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('pelamar_details as pd')
+                    ->join('pelamar as p', 'p.ID', '=', 'pd.id_pelamar')
+                    ->whereColumn('p.NIK', 'health_tests.nik')
+                    ->whereNotNull('pd.file_surat_sehat');
+            })
             ->latest('health_tests.created_at')
             ->get();
 
         return view('health_test.index', compact('data'));
+    }
+
+    /**
+     * Detail satu Health Test untuk modal "Detail Health Test".
+     *
+     * Diambil dari id health test langsung (tanpa join pengganda baris) supaya
+     * modal tidak menampilkan data kosong. Nilai diambil per kolom dengan
+     * subquery ber-limit 1 supaya tetap benar walau NIK ganda.
+     */
+    public function show($id)
+    {
+        $row = DB::table('health_tests')->where('id', $id)->first();
+
+        if (!$row) {
+            return response()->json([
+                'message' => 'Data Health Test tidak ditemukan.',
+            ], 404);
+        }
+
+        $namarow = DB::table('pelamar as p')
+            ->select('p.NAMA as nama')
+            ->where('p.NIK', $row->nik)
+            ->orderBy('p.ID')
+            ->first();
+
+        $suratrow = DB::table('pelamar_details as pd')
+            ->join('pelamar as p', 'p.ID', '=', 'pd.id_pelamar')
+            ->select('pd.file_surat_sehat as file_surat_sehat')
+            ->where('p.NIK', $row->nik)
+            ->whereNotNull('pd.file_surat_sehat')
+            ->orderBy('pd.ID')
+            ->first();
+
+        return response()->json([
+            'id' => $row->id,
+            'nik' => $row->nik,
+            'nama' => $namarow->nama ?? '-',
+            'kesimpulan' => (int) $row->kesimpulan,
+            'tanggal_test' => $row->created_at
+                ? \Carbon\Carbon::parse($row->created_at)->format('d M Y')
+                : '-',
+
+            'cacat' => $row->cacat,
+            'buta_warna' => $row->buta_warna,
+            'visus_mata_od' => $row->visus_mata_od,
+            'visus_mata_os' => $row->visus_mata_os,
+            'tinggi' => $row->tinggi,
+            'berat' => $row->berat,
+            'suhu' => $row->suhu,
+            'gigi' => $row->gigi,
+            'tekanan_darah' => $row->tekanan_darah,
+            'respirasi' => $row->respirasi,
+            'denyut' => $row->denyut,
+            'abdoment' => $row->abdoment,
+            'cor_pulmo' => $row->cor_pulmo,
+            'tht' => $row->tht,
+            'extreme' => $row->extreme,
+            'paru' => $row->paru,
+            'hepatitis' => $row->hepatitis,
+            'jantung' => $row->jantung,
+            'thypoid' => $row->thypoid,
+            'alergi' => $row->alergi,
+            'ashma' => $row->ashma,
+            'lain' => $row->lain,
+            'remark' => $row->remark,
+            'file_surat_sehat' => $suratrow->file_surat_sehat ?? null,
+        ]);
     }
 
     public function create()

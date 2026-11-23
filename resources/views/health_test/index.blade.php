@@ -63,6 +63,7 @@
                                                     class="btn btn-info btn-circle btn-sm btn-detail"
 
                                                     data-id="{{ $row->id }}"
+                                                    data-detail-url="{{ route('health-test.detail', $row->id) }}"
                                                     data-nik="{{ $row->nik }}"
                                                     data-nama="{{ $row->nama }}"
                                                     data-kesimpulan="{{ $row->kesimpulan }}"
@@ -170,6 +171,8 @@
                 </div>
 
                 <div class="modal-body">
+                    <div id="detail_server_notice"></div>
+
 
                     <div class="row">
 
@@ -401,6 +404,120 @@
         </div>
     </div>
 
+<script>
+    /*
+     * Detail Health Test.
+     *
+     * Perbaikan 2026-11-23: pengisian modal dipindah ke handler delegasi pada
+     * script tersendiri, tidak lagi di dalam $(document).ready milik DataTable.
+     * Sebelumnya handler dipasang SETELAH $('#dataTable').DataTable(...); bila
+     * inisialisasi itu melempar galat (mis. aset DataTables gagal dimuat),
+     * handler tidak pernah terpasang sehingga modal terbuka dengan data kosong
+     * dan judul tetap "Detail Health Test".
+     *
+     * Alur: (1) isi langsung dari atribut data-* baris (tanpa jaringan) supaya
+     * modal tidak pernah kosong, lalu (2) ambil ulang dari server
+     * (health-test.detail) sebagai nilai otoritatif, dan (3) beri pesan bila
+     * server tidak bisa dihubungi.
+     */
+    function htYaTidak(v) {
+        return (v === 1 || v === '1' || v === true || v === 'TRUE' || v === 'true')
+            ? '✅ YA'
+            : '❌ TIDAK';
+    }
+
+    function htIsi(v) {
+        return (v === null || v === undefined || v === '') ? '-' : String(v);
+    }
+
+    function htAngkaSatuan(v, satuan) {
+        return (v === null || v === undefined || v === '') ? '-' : (v + ' ' + satuan);
+    }
+
+    function htTampilkanDetail(d) {
+        $('#modalTitle').html(
+            'Detail Health Test — ' + htIsi(d.nama) + ' (' + htIsi(d.nik) + ')'
+        );
+
+        $('#cacat').html(htYaTidak(d.cacat));
+        $('#buta_warna').html(htYaTidak(d.buta_warna));
+
+        $('#visus_mata_od').html(htIsi(d.visus_mata_od));
+        $('#visus_mata_os').html(htIsi(d.visus_mata_os));
+
+        $('#tinggi').html(htAngkaSatuan(d.tinggi, 'cm'));
+        $('#berat').html(htAngkaSatuan(d.berat, 'kg'));
+
+        $('#suhu').html(htIsi(d.suhu));
+        $('#gigi').html(htIsi(d.gigi));
+
+        $('#tekanan_darah').html(htIsi(d.tekanan_darah));
+        $('#respirasi').html(htIsi(d.respirasi));
+        $('#denyut').html(htIsi(d.denyut));
+
+        $('#abdoment').html(htIsi(d.abdoment));
+        $('#cor_pulmo').html(htIsi(d.cor_pulmo));
+        $('#tht').html(htIsi(d.tht));
+        $('#extreme').html(htIsi(d.extreme));
+
+        $('#paru').html(htYaTidak(d.paru));
+        $('#hepatitis').html(htYaTidak(d.hepatitis));
+        $('#jantung').html(htYaTidak(d.jantung));
+        $('#thypoid').html(htYaTidak(d.thypoid));
+        $('#alergi').html(htYaTidak(d.alergi));
+        $('#ashma').html(htYaTidak(d.ashma));
+
+        if (d.lain) {
+            $('#lain_wrapper').show();
+            $('#lain').html(d.lain);
+        } else {
+            $('#lain_wrapper').hide();
+            $('#lain').html('');
+        }
+
+        if (d.remark) {
+            $('#remark_wrapper').show();
+            $('#remark').html(d.remark);
+        } else {
+            $('#remark_wrapper').hide();
+            $('#remark').html('');
+        }
+
+        $('#kesimpulan_alert').html(
+            (d.kesimpulan == 1)
+                ? '<div class="alert alert-success"><h5 class="mb-0">SEHAT</h5></div>'
+                : '<div class="alert alert-danger"><h5 class="mb-0">KURANG SEHAT</h5></div>'
+        );
+    }
+
+    $(document).on('click', '.btn-detail', function () {
+        let tombol = $(this);
+
+        // (1) isi seketika dari atribut baris
+        htTampilkanDetail(tombol.data());
+
+        // (2) sinkronkan dengan data otoritatif dari server
+        let url = tombol.data('detail-url');
+
+        if (!url) {
+            return;
+        }
+
+        $('#detail_server_notice').html('');
+
+        $.getJSON(url)
+            .done(function (res) {
+                htTampilkanDetail(res);
+            })
+            .fail(function () {
+                $('#detail_server_notice').html(
+                    '<div class="alert alert-warning mb-2">Nilai di atas dibaca dari tabel. ' +
+                    'Data rinci tidak dapat dimuat dari server.</div>'
+                );
+            });
+    });
+</script>
+
 </body>
 
 {{-- DATATABLE --}}
@@ -439,82 +556,6 @@
             pageLength: 25,
             responsive: true,
             autoWidth: false
-        });
-
-        function check(v) {
-            return v == 1 ? '✅ YA' : '❌ TIDAK';
-        }
-
-        $('.btn-detail').click(function() {
-
-            let data = $(this).data();
-
-            $('#modalTitle').html(
-                'Detail Health Test — ' +
-                data.nama +
-                ' (' + data.nik + ')'
-            );
-
-            $('#cacat').html(check(data.cacat));
-            $('#buta_warna').html(check(data.buta_warna));
-
-            $('#visus_mata_od').html(data.visus_mata_od);
-            $('#visus_mata_os').html(data.visus_mata_os);
-
-            $('#tinggi').html(data.tinggi + ' cm');
-            $('#berat').html(data.berat + ' kg');
-
-            $('#suhu').html(data.suhu);
-            $('#gigi').html(data.gigi);
-
-            $('#tekanan_darah').html(data.tekanan_darah);
-            $('#respirasi').html(data.respirasi);
-            $('#denyut').html(data.denyut);
-
-            $('#paru').html(check(data.paru));
-            $('#hepatitis').html(check(data.hepatitis));
-            $('#jantung').html(check(data.jantung));
-            $('#thypoid').html(check(data.thypoid));
-            $('#alergi').html(check(data.alergi));
-            $('#ashma').html(check(data.ashma));
-            
-
-            if (data.lain) {
-                $('#lain_wrapper').show();
-                $('#lain').html(data.lain);
-            } else {
-                $('#lain_wrapper').hide();
-            }
-
-            let kesimpulanHtml = '';
-
-            if (data.kesimpulan == 1) {
-
-                kesimpulanHtml = `
-                    <div class="alert alert-success">
-                        <h5 class="mb-0">SEHAT</h5>
-                    </div>
-                `;
-
-            } else {
-
-                kesimpulanHtml = `
-                    <div class="alert alert-danger">
-                        <h5 class="mb-0">KURANG SEHAT</h5>
-                    </div>
-                `;
-
-            }
-
-            $('#kesimpulan_alert').html(kesimpulanHtml);
-
-            if (data.remark) {
-                $('#remark_wrapper').show();
-                $('#remark').html(data.remark);
-            } else {
-                $('#remark_wrapper').hide();
-            }
-
         });
 
     });
