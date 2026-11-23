@@ -39,6 +39,7 @@ class LeaveApprovalQuery
                 lr.approval_progress,
                 lr.status,
                 lr.leave_type_id,
+                lr.attach_files,
                 lr.created_at
             FROM leave_requests lr
             WHERE lr.status = 'pending'

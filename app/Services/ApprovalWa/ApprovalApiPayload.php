@@ -153,7 +153,55 @@ class ApprovalApiPayload
             'message'         => $message,
             'approve_command' => "/approve-cuti$id",
             'reject_command'  => "/tolak-cuti$id <alasan>",
+            'attachments'     => self::attachmentsFor($request),
         ];
+    }
+
+    /**
+     * Lampiran pengajuan (disk public) yang siap dikirim messaging layer.
+     *
+     * Item: name, path, mime, size, url, kind (image|document).
+     * Messaging layer mengirim image apa adanya dan merender PDF jadi gambar
+     * lebih dulu (aturan produk), tipe lain dikirim sebagai dokumen.
+     */
+    private static function attachmentsFor(object $request): array
+    {
+        $raw = $request->attach_files ?? null;
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $paths   = is_array($decoded) ? $decoded : [];
+        } else {
+            $paths = is_array($raw) ? $raw : [];
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        $out  = [];
+
+        foreach ($paths as $path) {
+            $path = ltrim((string) $path, '/');
+            if ($path === '' || str_contains($path, '..')) {
+                continue;
+            }
+            try {
+                if (!$disk->exists($path)) {
+                    Log::warning("[ApprovalApi] lampiran tidak ada di disk: $path (request #{$request->id})");
+                    continue;
+                }
+                $mime  = (string) $disk->mimeType($path);
+                $out[] = [
+                    'name' => basename($path),
+                    'path' => $path,
+                    'mime' => $mime,
+                    'size' => (int) $disk->size($path),
+                    'url'  => url($disk->url($path)),
+                    'kind' => str_starts_with($mime, 'image/') ? 'image' : 'document',
+                ];
+            } catch (\Throwable $e) {
+                Log::warning("[ApprovalApi] gagal baca lampiran $path: " . $e->getMessage());
+            }
+        }
+
+        return $out;
     }
 
     /**
