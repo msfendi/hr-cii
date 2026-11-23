@@ -19,6 +19,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
@@ -120,14 +121,48 @@ class GeneratePayrollProcessV2 implements ShouldQueue
             ]);
         }
 
-        $biodataUnion = DB::connection('cii')
+        /*
+        |--------------------------------------------------------------------------
+        | BIODATA UNION (WAJIB 1 BARIS PER NPK)
+        |--------------------------------------------------------------------------
+        | Ada NPK yang punya baris di BIODATA (karyawan aktif) SEKALIGUS di
+        | BIODATA_KELUAR (riwayat keluar) dengan isi kolom tidak persis sama —
+        | kasus nyata: IS_EXPAT berisi '0' di BIODATA tapi NULL di
+        | BIODATA_KELUAR. Karena satu kolom berbeda, DISTINCT di $employeeBase
+        | tidak bisa menyatukan kedua baris dan NPK tersebut terhitung 2x.
+        |
+        | Perbaikan: IS_EXPAT dinormalkan (NULL -> '0') lalu diambil SATU baris
+        | per NPK dengan prioritas baris BIODATA (data karyawan aktif).
+        |--------------------------------------------------------------------------
+        */
+        $biodataRaw = DB::connection('cii')
             ->table('BIODATA')
-            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), DB::raw("ISNULL(IS_EXPAT, '0') AS IS_EXPAT"), DB::raw('1 AS prioritas'))
             ->unionAll(
                 DB::connection('cii')
                     ->table('BIODATA_KELUAR')
-                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), 'IS_EXPAT')
+                    ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), DB::raw("ISNULL(IS_EXPAT, '0') AS IS_EXPAT"), DB::raw('2 AS prioritas'))
             );
+
+        $biodataRanked = DB::connection('cii')
+            ->query()
+            ->fromSub($biodataRaw, 'biodata_raw')
+            ->select(
+                'NPK',
+                'ID_DEPT',
+                'SECTION',
+                'NAMA_KARYAWAN',
+                'IS_STAFF',
+                'BARCODE',
+                'IS_EXPAT',
+                DB::raw('ROW_NUMBER() OVER (PARTITION BY NPK ORDER BY prioritas ASC) AS rn')
+            );
+
+        $biodataUnion = DB::connection('cii')
+            ->query()
+            ->fromSub($biodataRanked, 'biodata_ranked')
+            ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', 'BARCODE', 'IS_EXPAT')
+            ->where('rn', 1);
 
         /*
         |--------------------------------------------------------------------------
@@ -1161,6 +1196,32 @@ END AS special_overtime_hours
             ->orderBy('emp.ID_DEPT', 'asc')
             ->orderBy('emp.NPK', 'asc')
             ->get();
+
+        /*
+        |--------------------------------------------------------------------------
+        | SAFETY-NET NPK GANDA
+        |--------------------------------------------------------------------------
+        | Satu karyawan = satu baris payroll. Kalau sumber master tetap
+        | menghasilkan NPK ganda, baris berlebih dibuang DAN dicatat di log
+        | supaya penyebabnya masih bisa ditelusuri (tidak hilang diam-diam).
+        |--------------------------------------------------------------------------
+        */
+        $barisSebelumDedup = $employees->count();
+        if ($barisSebelumDedup !== $employees->pluck('NPK')->unique()->count()) {
+            $npkGanda = $employees->groupBy('NPK')
+                ->filter(fn ($rows) => $rows->count() > 1)
+                ->keys()
+                ->values()
+                ->all();
+
+            Log::warning('Payroll: NPK ganda dibuang dari daftar karyawan', [
+                'period_id' => $period->id,
+                'npk' => $npkGanda,
+                'baris_sebelum' => $barisSebelumDedup,
+            ]);
+
+            $employees = $employees->unique('NPK')->values();
+        }
 
         if (!$isCheck) {
             $run->update([
