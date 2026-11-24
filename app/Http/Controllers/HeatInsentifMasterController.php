@@ -179,6 +179,8 @@ class HeatInsentifMasterController extends Controller
         // HeatEfficiency::where('period_id', $period->id)->delete();
         if ($request->is_insentif == 1) {
 
+            config(['excel.transactions.handler' => 'null']);
+
             Excel::import(
                 new HeatInsentifImport($request->period_id),
                 $request->file('file')
