@@ -41,6 +41,14 @@ class AiChatService
     /** Guard data payroll per role_payrolls (R33). */
     protected ?PayrollAccessGuard $payrollGuard = null;
 
+    /**
+     * Apakah balasan provider terakhir yang diekstrak berasal dari blok
+     * kode yang TIDAK pernah ditutup (= balasan terpotong karena kehabisan
+     * budget token). Dipakai validator supaya alasannya jelas, bukan
+     * "Query tidak diawali SELECT/WITH".
+     */
+    protected bool $sqlTerpotong = false;
+
     protected function aturanRag(): RagRules
     {
         return $this->aturanRag ??= app(RagRules::class);
@@ -564,6 +572,30 @@ class AiChatService
             if ($validation['valid'] && $pertanyaanPayroll
                 && ! $this->payrollGuard()->sqlSesuaiCakupan($sql, $rolePayroll)) {
                 $validation = ['valid' => false, 'reason' => $this->payrollGuard()->pesanFilterHilang($rolePayroll)];
+            }
+
+            // Nama tabel yang dikarang AI (mis. "candidate_taps") tidak ada
+            // di database. Tandai tidak valid supaya query diperbaiki dulu,
+            // bukan langsung dikirim ke SQL Server yang akan menolak dengan
+            // "Invalid object name".
+            if ($validation['valid']) {
+                $tabelAneh = $this->tabelTidakDikenal($sql, $schema);
+
+                if (! empty($tabelAneh)) {
+                    $sarannya = [];
+
+                    foreach ($tabelAneh as $tabel) {
+                        $usul = $this->usulNamaTabel($tabel, $schema);
+                        $sarannya[] = $usul === []
+                            ? "{$tabel} (tidak ada di database)"
+                            : "{$tabel} (kemungkinan nama aslinya: " . implode(', ', $usul) . ')';
+                    }
+
+                    $validation = [
+                        'valid' => false,
+                        'reason' => 'Nama tabel tidak ada di database: ' . implode('; ', $sarannya),
+                    ];
+                }
             }
 
             if (! $validation['valid']) {
@@ -1418,7 +1450,22 @@ class AiChatService
             $diawaliSelect = (str_starts_with($bersih, 'select') || str_starts_with($bersih, 'with')) ? 1 : 0;
         }
         if ($diawaliSelect !== 1) {
+            // Pagar markdown yang belum dilepas = balasan provider terpotong
+            // atau bukan query sama sekali. Bedakan dua-duanya supaya user
+            // melihat alasan yang benar, bukan "tidak diawali SELECT/WITH".
+            if ($this->masihAdaPagarKode($sql)) {
+                return ['valid' => false, 'reason' => 'Jawaban AI terpotong di tengah (blok kode ``` belum tertutup)'];
+            }
+
             return ['valid' => false, 'reason' => 'Query tidak diawali SELECT/WITH'];
+        }
+
+        // Query terpotong: kurung kurawal/kurung buka tidak seimbang, atau
+        // blok kode belum ditutup. Eksekusi query begini ke SQL Server hanya
+        // menghasilkan error sintaks yang membingungkan, jadi ditolak lebih
+        // dulu dengan alasan yang jelas.
+        if ($this->queryTerpotong($sql)) {
+            return ['valid' => false, 'reason' => 'Jawaban AI terpotong di tengah (query belum lengkap)'];
         }
 
         // Hanya satu statement (tanpa titik koma di tengah, kecuali di dalam string literal)
@@ -1465,6 +1512,191 @@ class AiChatService
         }
 
         return ['valid' => true];
+    }
+
+    /**
+     * Nama tabel yang disebut query tapi TIDAK ADA di database.
+     *
+     * Model kadang mengarang nama tabel yang terdengar logis (mis.
+     * "candidate_taps", "employe_shifts", "Jadwal", "Masuk", "Keluar")
+     * padahal di database aslinya bernama lain ("employee_shifts", "shifts",
+     * "att_log"). Query seperti itu pasti gagal di SQL Server dengan
+     * "Invalid object name", dan pesan error mentahnya membingungkan
+     * bagi user.
+     *
+     * Deteksi di sini supaya:
+     * - AI diberi chance memperbaiki query (nama tabel dikembalikan).
+     * - Kalau tetap gagal, pesan ke user menyebut tabel yang salah dengan
+     *   jelas, bukan error SQL mentah.
+     *
+     * Mengembalikan daftar nama tabel yang tidak dikenal. Array kosong
+     * berarti semua nama tabel yang disebut memang ada.
+     */
+    protected function tabelTidakDikenal(string $sql, array $schema): array
+    {
+        if (empty($schema)) {
+            // Skema tidak terbaca — jangan menuduh query salah.
+            return [];
+        }
+
+        $daftarTabel = array_keys($schema);
+        $dikenal = array_map('strtolower', $daftarTabel);
+
+        // Nama CTE yang dideklarasikan query sendiri BUKAN nama tabel, jadi
+        // tidak boleh dianggap "tidak dikenal" (mis. "WITH FingerHarian AS ...").
+        $cte = $this->namaCte($sql);
+
+        // Nama tabel yang disebut query: dari klausa FROM / JOIN.
+        $lower = strtolower($sql);
+        $pola = @preg_match_all('/\b(?:from|join)\s+([`\[\"]?)([a-z0-9_]+)\1/i', $lower, $m);
+
+        if ($pola === false || empty($m[2])) {
+            return [];
+        }
+
+        $tidakAda = [];
+
+        foreach ($m[2] as $nama) {
+            $nama = strtolower(trim((string) $nama));
+
+            if ($nama === '' || in_array($nama, $dikenal, true) || in_array($nama, $cte, true)) {
+                continue;
+            }
+
+            // Nama fungsi/tabel sementara bukan tabel nyata.
+            if (in_array($nama, ['values', 'select', 'lateral', 'openquery', 'table'], true)) {
+                continue;
+            }
+
+            $tidakAda[] = $nama;
+        }
+
+        return array_values(array_unique($tidakAda));
+    }
+
+    /**
+     * Nama CTE yang dideklarasikan di dalam query (hasil WITH ... AS (...)).
+     * Dipakai supaya nama turunan CTE tidak salah dianggap tabel yang tidak
+     * ada di database.
+     */
+    protected function namaCte(string $sql): array
+    {
+        $teks = trim($sql);
+
+        if (! str_starts_with(strtolower($teks), 'with')) {
+            return [];
+        }
+
+        // Potong bagian WITH..SELECT utama (SELECT di luar kurung).
+        $panjang = strlen($teks);
+        $kedalaman = 0;
+        $batas = $panjang;
+
+        for ($i = 0; $i < $panjang; $i++) {
+            $c = $teks[$i];
+
+            if ($c === '(') {
+                $kedalaman++;
+                continue;
+            }
+
+            if ($c === ')') {
+                $kedalaman--;
+                continue;
+            }
+
+            if ($kedalaman === 0 && strtolower(substr($teks, $i, 6)) === 'select') {
+                $batas = $i;
+                break;
+            }
+        }
+
+        $bagianCte = substr($teks, 4, max(0, $batas - 4));
+        $hasil = [];
+        $pola = @preg_match_all('/([a-zA-Z0-9_]+)\s+AS\s*\(/i', $bagianCte, $m);
+
+        if ($pola !== false) {
+            foreach ($m[1] as $nama) {
+                $hasil[] = strtolower($nama);
+            }
+        }
+
+        return array_values(array_unique($hasil));
+    }
+
+    /**
+     * Nama tabel yang mirip — untuk proposing nama yang benar
+     * (mis. "employe_shifts" -> "employee_shifts").
+     */
+    protected function usulNamaTabel(string $nama, array $schema): array
+    {
+        $candidates = [];
+
+        foreach (array_keys($schema) as $tabel) {
+            $jarak = levenshtein(strtolower($nama), strtolower($tabel));
+
+            if ($jarak <= 3) {
+                $candidates[$tabel] = $jarak;
+            }
+        }
+
+        asort($candidates);
+
+        return array_slice(array_keys($candidates), 0, 3);
+    }
+
+    /**
+     * Apakah teks masih memuat pagar markdown (blok kode belum ditutup)?
+     */
+    protected function masihAdaPagarKode(string $teks): bool
+    {
+        return str_contains($teks, '```');
+    }
+
+    /**
+     * Apakah query terpotong di tengah?
+     *
+     * Dua tanda yang bisa dideteksi tanpa bergantung mesin regex:
+     * 1. Pagar markdown masih ada (blok kode tidak pernah ditutup).
+     * 2. Jumlah kurung kurawal / kurung buka tidak seimbang — tanda query
+     *    berhenti di tengah kalimat (mis. "... WHERE a.scan_date >= DATEADD(").
+     *
+     * String literal diabaikan supaya tanda baca di dalam data ('(' dsb)
+     * tidak salah dihitung.
+     */
+    protected function queryTerpotong(string $sql): bool
+    {
+        // Flag dari extractSql(): balasan provider punya blok kode yang tidak
+        // pernah ditutup. Ini tanda paling pasti bahwa balasan terpotong.
+        if ($this->sqlTerpotong) {
+            return true;
+        }
+
+        if ($this->masihAdaPagarKode($sql)) {
+            return true;
+        }
+
+        $tanpaString = $this->gantiPola("/'([^']|'')*'/s", "''", $sql);
+
+        $kurungKurawal = substr_count($tanpaString, '{') - substr_count($tanpaString, '}');
+        $kurungBuka = substr_count($tanpaString, '(') - substr_count($tanpaString, ')');
+
+        if ($kurungKurawal !== 0 || $kurungBuka !== 0) {
+            return true;
+        }
+
+        // Berakhir di tengah ekspresi: kata kunci SQL yang jelas belum
+        // selesai (mis. "... ORDER BY a.scan_date" tanpa titik koma masih
+        // boleh, jadi hanya kata operator yang menggantung).
+        $akhir = strtolower(trim(substr($tanpaString, -40)));
+
+        foreach ([' and ', ' or ', ' where ', ' join ', ' on ', ' from ', ' select ', ','] as $kata) {
+            if (str_ends_with($akhir, rtrim($kata))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1705,12 +1937,18 @@ class AiChatService
      */
     protected function extractSql(string $response): string
     {
+        // Flag "terpotong" direset dulu: setiap panggilan extractSql()
+        // menetapkan status blok kode pada balasan yang sedang diproses.
+        $this->sqlTerpotong = false;
+
         $blok = @preg_match('/```sql\s*(.+?)\s*```/is', $response, $m);
         if ($blok === 1) {
             return trim($m[1]);
         }
         if ($blok === false) {
             // Mesin regex gagal: buang pagar kode secara manual.
+            $this->sqlTerpotong = $this->pagarBelumTutup($response);
+
             return trim(str_replace('```sql', '', str_replace('```', '', $response)));
         }
 
@@ -1719,10 +1957,65 @@ class AiChatService
             return trim($m[1]);
         }
         if ($blok === false) {
+            $this->sqlTerpotong = $this->pagarBelumTutup($response);
+
             return trim(str_replace('```', '', $response));
         }
 
-        return trim($response);
+        // Blok kode TERBUKA tanpa penutup: jawaban provider terpotong (budget
+        // token habis / koneksi putus) sehingga pagar ``` penutup tidak pernah
+        // dikirim. Dulu kasus ini jatuh ke "kembalikan mentah-mentah", jadi
+        // SQL yang tersimpan di meta['sql'] masih diawali "```sql" dan
+        // validator menolak dengan alasan membingungkan ("Query tidak diawali
+        // SELECT/WITH"). Sekarang pagar pembuka yang dibuang, sehingga query
+        // tetap bisa dieksekusi — dan status terpotong ditandai supaya
+        // validator menandainya sebagai query terpotong.
+        $this->sqlTerpotong = $this->pagarBelumTutup($response);
+
+        $teks = $this->buangPagarKode($response);
+
+        return trim($teks);
+    }
+
+    /**
+     * Apakah balasan provider punya blok kode yang tidak pernah ditutup?
+     *
+     * Jumlah pagar markdown yang ganjil = ada pembuka tanpa penutup. Ini
+     * tanda paling pasti bahwa balasan terpotong (budget token habis),
+     * jauh lebih akurat daripada menebak dari bentuk SQL-nya.
+     */
+    protected function pagarBelumTutup(string $teks): bool
+    {
+        return substr_count($teks, '```') % 2 === 1;
+    }
+
+    /**
+     * Apakah SQL terakhir yang diekstrak berasal dari balasan terpotong?
+     */
+    protected function sqlTerpotong(): bool
+    {
+        return $this->sqlTerpotong;
+    }
+
+    /**
+     * Buang pagar markdown (``` / ```sql) dari teks, sisakan isinya.
+     * Dipakai saat balasan provider terpotong di tengah blok kode.
+     */
+    protected function buangPagarKode(string $teks): string
+    {
+        // Ambil isi blok kode yang TERBUKA: buang penanda pembuka di awal,
+        // lalu ambil teks setelah pagar penutup terakhir kalau ada.
+        $tanpaPembuka = $this->gantiPola('/^\s*```[a-zA-Z0-9_+-]*\s*/', '', $teks, 1);
+
+        // Kalau ada pagar penutup, ambil isi di dalamnya saja.
+        $blok = @preg_match('/```\s*(.+?)\s*```/is', $tanpaPembuka, $m);
+        if ($blok === 1) {
+            return $m[1];
+        }
+
+        // Tanpa penutup: buang pagar penutup sisa (kalau model sempat menulis
+        // pagar di luar blok) dan sisakan isi blok.
+        return $this->gantiPola('/```\s*$/', '', $tanpaPembuka);
     }
 
     /**
