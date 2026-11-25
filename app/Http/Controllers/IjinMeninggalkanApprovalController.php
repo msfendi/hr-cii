@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\IjinMeninggalkanRequest;
+use App\Services\ApprovalWa\ApprovalCommandParser;
+use App\Services\ApprovalWa\ApprovalWebhookTrigger;
 use App\Services\IzinMeninggalkan\IjinMeninggalkanApproval;
 use App\Services\WorkAssignment\EmployeeLookupService;
 use Illuminate\Http\Request;
@@ -208,6 +210,18 @@ class IjinMeninggalkanApprovalController extends Controller
 
         if ($result['ok']) {
             Log::info("[IzinMeninggalkan] #{$id} {$decision} oleh {$npk} pada level {$level}");
+
+            if ($decision === 'approve') {
+                try {
+                    ApprovalWebhookTrigger::notify(
+                        (string) $req->token,
+                        'approve',
+                        ApprovalCommandParser::DOC_IZIN_MENINGGALKAN
+                    );
+                } catch (\Throwable $e) {
+                    Log::error("[IzinMeninggalkan] gagal cascade notifikasi #{$id}: " . $e->getMessage());
+                }
+            }
         } else {
             Log::warning("[IzinMeninggalkan] #{$id} {$decision} gagal oleh {$npk}: {$result['message']}");
         }

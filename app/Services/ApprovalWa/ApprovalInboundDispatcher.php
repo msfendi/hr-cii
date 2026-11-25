@@ -22,8 +22,10 @@ class ApprovalInboundDispatcher
             return ApprovalCommandParser::helpText();
         }
 
-        return $parsed['doc'] === ApprovalCommandParser::DOC_IZIN_DINAS
-            ? IzinDinasInboundProcessor::handle($phone, $message)
-            : LeaveInboundProcessor::handle($phone, $message);
+        return match ($parsed['doc']) {
+            ApprovalCommandParser::DOC_IZIN_DINAS        => IzinDinasInboundProcessor::handle($phone, $message),
+            ApprovalCommandParser::DOC_IZIN_MENINGGALKAN => IzinMeninggalkanInboundProcessor::handle($phone, $message),
+            default                                      => LeaveInboundProcessor::handle($phone, $message),
+        };
     }
 }

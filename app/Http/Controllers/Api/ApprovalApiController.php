@@ -7,6 +7,7 @@ use App\Services\ApprovalWa\ApprovalApiPayload;
 use App\Services\ApprovalWa\ApprovalCommandParser;
 use App\Services\ApprovalWa\ApprovalInboundDispatcher;
 use App\Services\ApprovalWa\IzinDinasNotifier;
+use App\Services\ApprovalWa\IzinMeninggalkanNotifier;
 use App\Services\ApprovalWa\LeaveApprovalNotifier;
 use App\Services\ApprovalWa\PhoneFormatter;
 use Illuminate\Http\Request;
@@ -84,7 +85,11 @@ class ApprovalApiController extends Controller
         if ($decision !== '' && $requestId > 0) {
             // Bangun ulang jadi command supaya jalurnya sama dengan pesan teks
             // asli dari approver — termasuk jenis dokumennya.
-            $slug = $doc === ApprovalCommandParser::DOC_IZIN_DINAS ? 'izin-dinas' : 'cuti';
+            $slug = match ($doc) {
+                ApprovalCommandParser::DOC_IZIN_DINAS        => 'izin-dinas',
+                ApprovalCommandParser::DOC_IZIN_MENINGGALKAN => 'izin-meninggalkan',
+                default                                      => 'cuti',
+            };
             $verb = $decision === 'approve'
                 ? 'approve'
                 : ($decision === 'revert' ? 'batal' : 'tolak');
@@ -149,9 +154,11 @@ class ApprovalApiController extends Controller
         Log::info("[ApprovalApi] trigger for $doc token $token from {$request->ip()}");
 
         // Dry-run build payload — tidak kirim. Pengiriman dilakukan messaging layer.
-        $result = $doc === ApprovalCommandParser::DOC_IZIN_DINAS
-            ? IzinDinasNotifier::buildPayloadForToken($token)
-            : LeaveApprovalNotifier::buildPayloadForToken($token);
+        $result = match ($doc) {
+            ApprovalCommandParser::DOC_IZIN_DINAS        => IzinDinasNotifier::buildPayloadForToken($token),
+            ApprovalCommandParser::DOC_IZIN_MENINGGALKAN => IzinMeninggalkanNotifier::buildPayloadForToken($token),
+            default                                      => LeaveApprovalNotifier::buildPayloadForToken($token),
+        };
 
         if ($result === null) {
             return response()->json([

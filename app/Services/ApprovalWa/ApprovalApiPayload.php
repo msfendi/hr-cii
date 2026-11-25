@@ -2,6 +2,7 @@
 
 namespace App\Services\ApprovalWa;
 
+use App\Models\IjinMeninggalkanRequest;
 use App\Models\WorkAssignmentRequest;
 use Illuminate\Support\Facades\Log;
 
@@ -47,9 +48,11 @@ class ApprovalApiPayload
      */
     public static function pendingPayload(string $doc = ApprovalCommandParser::DOC_CUTI): array
     {
-        $items = $doc === ApprovalCommandParser::DOC_IZIN_DINAS
-            ? self::izinDinasItems()
-            : self::cutiItems();
+        $items = match ($doc) {
+            ApprovalCommandParser::DOC_IZIN_DINAS        => self::izinDinasItems(),
+            ApprovalCommandParser::DOC_IZIN_MENINGGALKAN => self::izinMeninggalkanItems(),
+            default                                      => self::cutiItems(),
+        };
 
         return [
             'generated_at' => now()->setTimezone('Asia/Jakarta')->toIso8601String(),
@@ -102,6 +105,34 @@ class ApprovalApiPayload
 
         foreach ($requests as $request) {
             $item = IzinDinasNotifier::buildPayloadForToken((string) $request->token);
+
+            if ($item !== null) {
+                $items[] = $item;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * Item pending untuk Izin Meninggalkan Tugas/Pekerjaan.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function izinMeninggalkanItems(): array
+    {
+        $requests = IjinMeninggalkanRequest::query()
+            ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->whereNull('void')->orWhereNotIn('void', ['true', '1']);
+            })
+            ->orderBy('id')
+            ->get(['id', 'token']);
+
+        $items = [];
+
+        foreach ($requests as $request) {
+            $item = IzinMeninggalkanNotifier::buildPayloadForToken((string) $request->token);
 
             if ($item !== null) {
                 $items[] = $item;

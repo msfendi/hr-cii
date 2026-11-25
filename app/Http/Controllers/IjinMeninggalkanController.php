@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\IjinMeninggalkanRequest;
+use App\Services\ApprovalWa\ApprovalCommandParser;
+use App\Services\ApprovalWa\ApprovalWebhookTrigger;
 use App\Services\GateSecurity\GateQr;
 use App\Services\IzinMeninggalkan\IzinMeninggalkanGateAdapter;
 use App\Services\WorkAssignment\ApprovalChainBuilder;
@@ -225,6 +227,16 @@ class IjinMeninggalkanController extends Controller
             Alert::error('Error', 'Gagal menyimpan pengajuan: ' . $e->getMessage());
 
             return back()->withInput();
+        }
+
+        try {
+            ApprovalWebhookTrigger::notify(
+                (string) $record->token,
+                'submit',
+                ApprovalCommandParser::DOC_IZIN_MENINGGALKAN
+            );
+        } catch (\Throwable $e) {
+            Log::error('[IzinMeninggalkan] gagal trigger notifikasi #' . $record->id . ': ' . $e->getMessage());
         }
 
         Alert::success(

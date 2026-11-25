@@ -31,9 +31,9 @@ class ApprovalWebhookTrigger
      *
      * @param string $token
      * @param string $triggerType 'submit' | 'approve' | 'cron' — untuk logging & filtering di Hermes
-     * @param string $doc         doctype dokumen (cuti | izin-dinas). Messaging layer
-     *                            memakai ini untuk tahu notifier mana yang dipanggil
-     *                            saat mengambil payload.
+     * @param string $doc         doctype dokumen (cuti | izin-dinas | izin-meninggalkan).
+     *                            Messaging layer memakai ini untuk tahu notifier mana
+     *                            yang dipanggil saat mengambil payload.
      */
     public static function notify(
         string $token,
@@ -91,9 +91,11 @@ class ApprovalWebhookTrigger
      */
     private static function sendDirect(string $token, string $doc = ApprovalCommandParser::DOC_CUTI): bool
     {
-        $result = $doc === ApprovalCommandParser::DOC_IZIN_DINAS
-            ? IzinDinasNotifier::notifyToken($token)
-            : LeaveApprovalNotifier::notifyToken($token);
+        $result = match ($doc) {
+            ApprovalCommandParser::DOC_IZIN_DINAS        => IzinDinasNotifier::notifyToken($token),
+            ApprovalCommandParser::DOC_IZIN_MENINGGALKAN => IzinMeninggalkanNotifier::notifyToken($token),
+            default                                      => LeaveApprovalNotifier::notifyToken($token),
+        };
 
         if ($result['notified'] > 0) {
             return true;

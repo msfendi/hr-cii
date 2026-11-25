@@ -20,13 +20,15 @@ namespace App\Services\ApprovalWa;
  */
 class ApprovalCommandParser
 {
-    public const DOC_CUTI       = 'cuti';
-    public const DOC_IZIN_DINAS = 'izin-dinas';
+    public const DOC_CUTI               = 'cuti';
+    public const DOC_IZIN_DINAS         = 'izin-dinas';
+    public const DOC_IZIN_MENINGGALKAN  = 'izin-meninggalkan';
 
     /** Label tampilan per doctype. */
     public const DOC_LABELS = [
-        self::DOC_CUTI       => 'Cuti',
-        self::DOC_IZIN_DINAS => 'Izin Dinas',
+        self::DOC_CUTI              => 'Cuti',
+        self::DOC_IZIN_DINAS        => 'Izin Dinas',
+        self::DOC_IZIN_MENINGGALKAN => 'Izin Meninggalkan',
     ];
 
     /**
@@ -43,7 +45,7 @@ class ApprovalCommandParser
             return null;
         }
 
-        $docPattern = '(' . self::DOC_CUTI . '|' . self::DOC_IZIN_DINAS . ')';
+        $docPattern = '(' . self::DOC_CUTI . '|' . self::DOC_IZIN_DINAS . '|' . self::DOC_IZIN_MENINGGALKAN . ')';
 
         // ── APPROVE ──
         // /approve-cuti909, /approve-izin-dinas 10009, APPROVE-IZIN-DINAS#10009
@@ -137,7 +139,9 @@ class ApprovalCommandParser
             . "• /tolak-cuti<ID> <alasan>\n"
             . "• /batal-cuti<ID> <alasan>\n"
             . "• /approve-izin-dinas<ID>\n"
-            . "• /tolak-izin-dinas<ID> <alasan>\n\n"
+            . "• /tolak-izin-dinas<ID> <alasan>\n"
+            . "• /approve-izin-meninggalkan<ID>\n"
+            . "• /tolak-izin-meninggalkan<ID> <alasan>\n\n"
             . "Contoh: /approve-izin-dinas10009";
     }
 
@@ -148,6 +152,10 @@ class ApprovalCommandParser
     {
         $doc = strtolower(str_replace([' ', '_'], '-', trim($doc)));
 
-        return $doc === self::DOC_IZIN_DINAS ? self::DOC_IZIN_DINAS : self::DOC_CUTI;
+        return match ($doc) {
+            self::DOC_IZIN_DINAS        => self::DOC_IZIN_DINAS,
+            self::DOC_IZIN_MENINGGALKAN => self::DOC_IZIN_MENINGGALKAN,
+            default                     => self::DOC_CUTI,
+        };
     }
 }
