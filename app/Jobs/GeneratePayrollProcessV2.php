@@ -1649,6 +1649,8 @@ END AS special_overtime_hours
                 'tkk_in_period' => $isTkkInPeriod,
                 'tkk_day'        => $tkk ? (float) $tkk->day : 0,
                 'has_tkk'        => $tkk ? 1 : 0,
+                'tkk_month'      => $tkk->month,
+                'tmk_month'      => $tmk->month,
                 // BARU — dipakai formula pinalty_deduction (karyawan SPD)
                 'is_spd'         => $isSpdPinalty,
                 'is_agreement_signed' => $isAgreementSigned,
@@ -2924,6 +2926,8 @@ END AS special_overtime_hours
                     'tkk_in_period' => $isTkkInPeriod,
                     'tkk_day'        => $tkk ? (float) $tkk->day : 0,
                     'has_tkk'        => $tkk ? 1 : 0,
+                    'tkk_month'      => $tkk->month,
+                    'tmk_month'      => $tmk->month,
                     // BARU — dipakai formula pinalty_deduction (karyawan SPD)
                     'is_spd'         => $isSpdPinalty,
                     'is_agreement_signed' => $isAgreementSigned,

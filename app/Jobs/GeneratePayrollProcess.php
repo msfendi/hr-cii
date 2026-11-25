@@ -23,6 +23,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
+use App\Services\CompanyPayrollScope;
+use App\Services\TenantContext;
 use App\Services\PayrollRoleFilterService;
 
 class GeneratePayrollProcess implements ShouldQueue
@@ -55,7 +57,55 @@ class GeneratePayrollProcess implements ShouldQueue
 
     public function handle()
     {
-        $this->processPayroll(false);
+        // Job antrean berjalan tanpa session/user, jadi gerbang company_id
+        // tidak punya konteks. Konteks cabang diambil dari run/periode supaya
+        // proses hanya menyentuh data cabang pemilik run.
+        return $this->inCompanyContext(false, function () {
+            $this->processPayroll(false);
+        });
+    }
+
+    /**
+     * Jalankan callback dengan konteks cabang milik run/periode.
+     */
+    private function inCompanyContext(bool $isCheck, callable $callback)
+    {
+        $companyId = $this->resolveCompanyId($isCheck);
+
+        return \App\Support\CompanyQuery::forCompany($companyId, function () use ($companyId, $callback) {
+            return \App\Services\TenantContext::runAs($companyId, $callback);
+        });
+    }
+
+    /**
+     * Cabang pemilik run/periode.
+     *
+     * Urutan: payroll_runs.company_id -> payroll_periods.company_id ->
+     * session cabang aktif (mode check dari HTTP) -> cabang default.
+     */
+    private function resolveCompanyId(bool $isCheck): int
+    {
+        $companyId = 0;
+        $periodId = null;
+
+        if (!$isCheck) {
+            $run = PayrollRun::find($this->runId);
+            $companyId = (int) ($run->company_id ?? 0);
+            $periodId = $run->period_id ?? null;
+        } else {
+            $periodId = $this->runId;
+        }
+
+        if ($companyId <= 0 && $periodId) {
+            $period = PayrollPeriod::find($periodId);
+            $companyId = (int) ($period->company_id ?? 0);
+        }
+
+        if ($companyId <= 0) {
+            $companyId = (int) session('active_company_id', 0);
+        }
+
+        return $companyId > 0 ? $companyId : TenantContext::companyIdOrDefault();
     }
 
     /**
@@ -65,7 +115,9 @@ class GeneratePayrollProcess implements ShouldQueue
      */
     public function simulation($npk = null)
     {
-        return $this->processPayroll(true, $npk ?? $this->npk);
+        return $this->inCompanyContext(true, function () use ($npk) {
+            return $this->processPayroll(true, $npk ?? $this->npk);
+        });
     }
 
     /**
@@ -135,12 +187,10 @@ class GeneratePayrollProcess implements ShouldQueue
         | per NPK dengan prioritas baris BIODATA (data karyawan aktif).
         |--------------------------------------------------------------------------
         */
-        $biodataRaw = DB::connection('cii')
-            ->table('BIODATA')
+        $biodataRaw = \App\Support\CompanyQuery::table('BIODATA')
             ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), DB::raw("ISNULL(IS_EXPAT, '0') AS IS_EXPAT"), DB::raw('1 AS prioritas'))
             ->unionAll(
-                DB::connection('cii')
-                    ->table('BIODATA_KELUAR')
+                \App\Support\CompanyQuery::table('BIODATA_KELUAR')
                     ->select('NPK', 'ID_DEPT', 'SECTION', 'NAMA_KARYAWAN', 'IS_STAFF', DB::raw('CAST(BARCODE AS VARCHAR(50)) AS BARCODE'), DB::raw("ISNULL(IS_EXPAT, '0') AS IS_EXPAT"), DB::raw('2 AS prioritas'))
             );
 
@@ -177,8 +227,7 @@ class GeneratePayrollProcess implements ShouldQueue
             ]);
         }
 
-        $employeeBase = DB::connection('cii')
-            ->table('PKWT as p')
+        $employeeBase = \App\Support\CompanyQuery::table('PKWT as p')
 
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('p.NPK', '=', 'bio.NPK');
@@ -242,8 +291,7 @@ class GeneratePayrollProcess implements ShouldQueue
         |    bukan dari teks 'BR'/'OUT' di table overtimes lagi.
         |--------------------------------------------------------------------------
         */
-        $pkwtActive = DB::connection('cii')
-            ->table('PKWT as p')
+        $pkwtActive = \App\Support\CompanyQuery::table('PKWT as p')
             ->select('p.NPK', 'p.TMK', 'p.TKK')
             ->where('p.TMK', '<=', $periodEnd)
             ->where(function ($q) use ($periodStart) {
@@ -252,7 +300,7 @@ class GeneratePayrollProcess implements ShouldQueue
             })
             ->where('p.NPK', '!=', 'C-00017');
 
-        $latestContract = DB::table('employees_contract as ec1')
+        $latestContract = \App\Support\CompanyQuery::table('employees_contract as ec1')
             ->select(
                 'ec1.npk',
                 'ec1.salary',
@@ -291,8 +339,7 @@ class GeneratePayrollProcess implements ShouldQueue
             ]);
         }
 
-        $overtimeSummary = DB::connection('cii')
-            ->table('overtimes')
+        $overtimeSummary = \App\Support\CompanyQuery::table('overtimes')
             ->leftJoinSub($latestContract, 'ec', function ($join) {
                 $join->on('overtimes.NPK', '=', 'ec.npk');
             })
@@ -352,8 +399,7 @@ class GeneratePayrollProcess implements ShouldQueue
             )
             ->groupBy('overtimes.NPK');
 
-        $overtimeDetails = DB::connection('cii')
-            ->table('overtimes')
+        $overtimeDetails = \App\Support\CompanyQuery::table('overtimes')
             ->leftJoinSub($latestContract, 'ec', function ($join) {
                 $join->on('overtimes.NPK', '=', 'ec.npk');
             })
@@ -490,7 +536,7 @@ END AS special_overtime_hours
         | ada di connection DB yang berbeda dari `overtimes`/`cii`).
         |--------------------------------------------------------------------------
         */
-        $openIjinDates = DB::table('ijin_meninggalkan_pekerjaans')
+        $openIjinDates = \App\Support\CompanyQuery::table('ijin_meninggalkan_pekerjaans')
             ->whereBetween('tanggal', [$periodStart, $periodEnd])
             ->whereNull('jam_kembali')
             ->select('npk', DB::raw('CAST(tanggal AS DATE) as tanggal'))
@@ -518,8 +564,7 @@ END AS special_overtime_hours
 | LAPISAN TERLUAR: filter hanya baris dengan rn = 1 (scan paling relevan)
 |--------------------------------------------------------------------------
 */
-        $lateDetails = DB::connection('cii')
-            ->table('employee_lates as el')
+        $lateDetails = \App\Support\CompanyQuery::table('employee_lates as el')
 
             ->leftJoinSub($employeeBase, 'emp', function ($join) {
                 $join->on('el.npk', '=', 'emp.NPK');
@@ -619,8 +664,7 @@ END AS special_overtime_hours
 |--------------------------------------------------------------------------
 */
         $lateSummary =
-            DB::connection('cii')
-            ->table('employee_lates as el')
+            \App\Support\CompanyQuery::table('employee_lates as el')
 
             ->leftJoin('employee_shifts as es', function ($join) {
                 $join->on('el.npk', '=', 'es.npk')
@@ -701,7 +745,7 @@ END AS special_overtime_hours
 
         $assignment6s = Employee6sAssignment::where('period_id', $period->id);
 
-        $bpjsException = DB::table('bpjs_exceptions')
+        $bpjsException = \App\Support\CompanyQuery::table('bpjs_exceptions')
             ->select(
                 'npk',
                 DB::raw("MAX(CASE WHEN component = 'bpjs_kesehatan' THEN percentage END) as percentkes"),
@@ -723,7 +767,7 @@ END AS special_overtime_hours
             )
             ->groupBy('npk');
 
-        $ijinSummary = DB::table('ijin_meninggalkan_pekerjaans as imp')
+        $ijinSummary = \App\Support\CompanyQuery::table('ijin_meninggalkan_pekerjaans as imp')
             ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
             ->leftJoin('DEPT as db', 'db.ID_DEPT', '=', 'b.ID_DEPT')
             ->leftJoin('break_masters as bm', 'bm.id', '=', 'imp.id_break')
@@ -776,7 +820,7 @@ END AS special_overtime_hours
 
         // dd($ijinSummary->get());
 
-        $ijinDetails = DB::table('ijin_meninggalkan_pekerjaans as imp')
+        $ijinDetails = \App\Support\CompanyQuery::table('ijin_meninggalkan_pekerjaans as imp')
             ->leftJoin('BIODATA as b', 'b.NPK', '=', 'imp.npk')
             ->leftJoin('DEPT as db', 'db.ID_DEPT', '=', 'b.ID_DEPT')
             ->leftJoin('break_masters as bm', 'bm.id', '=', 'imp.id_break')
@@ -836,7 +880,7 @@ END AS special_overtime_hours
             ->get()
             ->groupBy('npk');
 
-        $payrollAdjustmentSummary = DB::table('payroll_adjusments')
+        $payrollAdjustmentSummary = \App\Support\CompanyQuery::table('payroll_adjusments')
             ->select(
                 'npk',
                 'period_id',
@@ -845,7 +889,7 @@ END AS special_overtime_hours
             ->where('period_id', $period->id)
             ->groupBy('npk', 'period_id');
 
-        $payrollAdjustmentDetails = DB::table('payroll_adjusments as pa')
+        $payrollAdjustmentDetails = \App\Support\CompanyQuery::table('payroll_adjusments as pa')
             ->leftJoinSub($employeeBase, 'emp', function ($join) {
                 $join->on('pa.npk', '=', 'emp.NPK');
             })
@@ -863,7 +907,7 @@ END AS special_overtime_hours
             ->get()
             ->groupBy('npk');
 
-        $nextMutation = DB::table('employee_mutations as em1')
+        $nextMutation = \App\Support\CompanyQuery::table('employee_mutations as em1')
             ->select(
                 'em1.npk',
                 'em1.from_dept',
@@ -878,7 +922,7 @@ END AS special_overtime_hours
         AND em2.date > ?
     )', [$periodEnd]);
 
-        $employeeViolationSummary = DB::table('employee_violations')
+        $employeeViolationSummary = \App\Support\CompanyQuery::table('employee_violations')
             ->select(
                 'npk',
                 DB::raw('SUM(percentage) as violation_percentage')
@@ -898,8 +942,7 @@ END AS special_overtime_hours
         | perbedaan huruf besar/kecil, mis. "security", "SECURITY", "Security".
         |--------------------------------------------------------------------------
         */
-        $nightShiftSummary = DB::connection('cii')
-            ->table('employee_shifts as es')
+        $nightShiftSummary = \App\Support\CompanyQuery::table('employee_shifts as es')
             ->join('shifts as s', 'es.shift_id', '=', 's.id')
             ->leftJoin('overtimes as o', function ($join) {
                 $join->on('o.NPK', '=', 'es.npk')
@@ -927,8 +970,7 @@ END AS special_overtime_hours
         | detail di halaman Payroll Processing / Payroll Approve.
         |--------------------------------------------------------------------------
         */
-        $nightShiftDetails = DB::connection('cii')
-            ->table('employee_shifts as es')
+        $nightShiftDetails = \App\Support\CompanyQuery::table('employee_shifts as es')
             ->join('shifts as s', 'es.shift_id', '=', 's.id')
             ->leftJoinSub($biodataUnion, 'bio', function ($join) {
                 $join->on('es.npk', '=', 'bio.NPK');
@@ -1105,6 +1147,21 @@ END AS special_overtime_hours
             }
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | F5 - BATAS CABANG
+        |--------------------------------------------------------------------------
+        | Saat MULTI_COMPANY_PAYROLL_SCOPE aktif, kandidat dibatasi pada
+        | karyawan yang ditempatkan di cabang aktif selama periode payroll.
+        | Saat nonaktif, query dikembalikan apa adanya (perilaku lama).
+        */
+        app(CompanyPayrollScope::class)->apply(
+            $employeesQuery,
+            TenantContext::companyIdOrDefault(),
+            $period->start_date,
+            $period->end_date
+        );
+
         $employees = $employeesQuery
             ->when($npk, function ($q) use ($npk) {
                 // Safety-net: employeeBase sudah difilter di root query,
@@ -1173,7 +1230,7 @@ END AS special_overtime_hours
         // kolom percentage). Dikirim ke formula role QC sebagai variable
         // `qc_violation`, mis. 50 => ((100-qc_violation)/100) = 0.5.
         // Beberapa baris pada periode yang sama dijumlahkan, dibatasi 0-100.
-        $qcViolationPercentage = min(100, max(0, (float) DB::table('qc_violations')
+        $qcViolationPercentage = min(100, max(0, (float) \App\Support\CompanyQuery::table('qc_violations')
             ->where('period_id', $period->id)
             ->sum('percentage')));
 
@@ -1210,7 +1267,7 @@ END AS special_overtime_hours
                 ->value('formula');
 
             // jumlah operasi per NPK pada periode ini (1 baris = 1 operasi unik)
-            $lineJumperOperationCounts = DB::table('line_jumper_operations')
+            $lineJumperOperationCounts = \App\Support\CompanyQuery::table('line_jumper_operations')
                 ->where('period_id', $period->id)
                 ->select('npk', DB::raw('COUNT(*) as total_operation'))
                 ->groupBy('npk')
@@ -1221,7 +1278,7 @@ END AS special_overtime_hours
             // jumlah hari tidak masuk per NPK pada periode ini: tanggal di table `overtimes`
             // yang JUMLAH_JAM_LEMBUR-nya 'MA' atau 'P1' (1 tanggal dihitung 1x)
             // Aturan: 1x tidak masuk => insentif dipotong 50%, 2x atau lebih => 0.
-            $lineJumperMangkirCounts = DB::table('overtimes')
+            $lineJumperMangkirCounts = \App\Support\CompanyQuery::table('overtimes')
                 ->whereRaw('CAST(OVERTIME_DATE AS DATE) BETWEEN ? AND ?', [
                     Carbon::parse($period->start_date)->format('Y-m-d'),
                     Carbon::parse($period->end_date)->format('Y-m-d'),
@@ -1268,7 +1325,7 @@ END AS special_overtime_hours
 
         // Overtime (dipakai berulang di sewing/pad/cutting/heat insentif untuk
         // validasi "apakah hari ini valid dihitung insentif")
-        $allOvertimesForInsentif = DB::table('overtimes')
+        $allOvertimesForInsentif = \App\Support\CompanyQuery::table('overtimes')
             ->whereBetween('OVERTIME_DATE', [$period->start_date, $period->end_date])
             ->get()
             ->groupBy('NPK')
@@ -1319,7 +1376,7 @@ END AS special_overtime_hours
             $mealCursor->addDay();
         }
 
-        $mealHolidayDates = DB::table('holidays')
+        $mealHolidayDates = \App\Support\CompanyQuery::table('holidays')
             ->whereBetween('holiday_date', [$period->start_date, $period->end_date])
             ->pluck('holiday_date');
         foreach ($mealHolidayDates as $mealHolidayDate) {
@@ -1342,7 +1399,7 @@ END AS special_overtime_hours
             }
         }
 
-        $firstKurs = (float) (DB::table('exchange_rates')
+        $firstKurs = (float) (\App\Support\CompanyQuery::table('exchange_rates')
             ->whereBetween('rate_date', [
                 $periodStart->copy()->startOfMonth()->toDateString(),
                 $periodStart->copy()->endOfMonth()->toDateString(),
@@ -1355,7 +1412,7 @@ END AS special_overtime_hours
         // Sewing violations untuk operator (per id_dept) dan untuk supervisor
         // (per range line). Kita ambil sekali, sudah join ke DEPT supaya bisa
         // dipakai untuk perhitungan range "LINE n" pada cabang supervisor.
-        $allSewingViolationsRaw = DB::table('sewing_violations')
+        $allSewingViolationsRaw = \App\Support\CompanyQuery::table('sewing_violations')
             ->leftJoin('DEPT as d', 'sewing_violations.id_dept', '=', 'd.ID_DEPT')
             ->whereBetween('sewing_violations.tanggal', [$period->start_date, $period->end_date])
             ->select('sewing_violations.id_dept', 'd.DEPARTEMENT')
@@ -1550,8 +1607,8 @@ END AS special_overtime_hours
                     ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
                     ? (
                         Str::ucfirst(Str::lower($employee->type)) === 'Contract'
-                        ? ((float) $employee->salary)
-                            : ((float) $employee->salary)
+                        ? (float) $employee->salary
+                        : ((float) $employee->salary)
                     )
                     : (
                         (
@@ -1695,7 +1752,7 @@ END AS special_overtime_hours
 
                         $amount = $totalSpecialOvertimePay;
                     } else if ($component->code === 'sewing_insentif') {
-                        $assignmentNpk = DB::table('employee_line_assignments as ela')
+                        $assignmentNpk = \App\Support\CompanyQuery::table('employee_line_assignments as ela')
                             ->select('ela.npk', 'ela.role')
                             ->where('ela.period_id', $period->id)
                             ->where('ela.npk', $employee->NPK)
@@ -1713,7 +1770,7 @@ END AS special_overtime_hours
                         | LOAD THRESHOLD
                         |----------------------------------------------------
                         */
-                        $thresholds = DB::table('insentif_thresholds')
+                        $thresholds = \App\Support\CompanyQuery::table('insentif_thresholds')
                             ->where('insentif_type', 'Sewing')
                             ->where('type', 'Percentage')
                             ->pluck('minimum', 'days');
@@ -1752,7 +1809,7 @@ END AS special_overtime_hours
                                 preg_match('/\d+/', $employee->DEPARTEMENT, $matches);
                                 $defaultLine = $matches[0] ?? null;
 
-                                $lineefficiencies = DB::table('employee_line_assignments as ela')
+                                $lineefficiencies = \App\Support\CompanyQuery::table('employee_line_assignments as ela')
                                     ->leftJoin('line_efficiencies as le', function ($join) {
                                         $join->on('le.period_id', '=', 'ela.period_id')
                                             ->on('le.line_number', '=', 'ela.line_number')
@@ -1760,7 +1817,7 @@ END AS special_overtime_hours
                                     })
 
                                     ->leftJoinSub(
-                                        DB::table('employee_line_assignments')
+                                        \App\Support\CompanyQuery::table('employee_line_assignments')
                                             ->select(
                                                 'period_id',
                                                 'line_number',
@@ -1803,7 +1860,7 @@ END AS special_overtime_hours
                                     $lineViolations = ($sewingViolationsByDept[$employee->ID_DEPT] ?? collect())->count();
                                 } elseif (strtolower($assignment->role) == 'supervisor') {
 
-                                    $leaderDept = DB::table('DEPT')
+                                    $leaderDept = \App\Support\CompanyQuery::table('DEPT')
                                         ->where('ID_DEPT', $employee->ID_DEPT)
                                         ->value('DEPARTEMENT');
 
@@ -1815,7 +1872,7 @@ END AS special_overtime_hours
                                         $lineNumber = $matches[1];
                                     }
 
-                                    $lineDeptId = DB::table('DEPT')
+                                    $lineDeptId = \App\Support\CompanyQuery::table('DEPT')
                                         ->where('DEPARTEMENT', 'LINE ' . $lineNumber)
                                         ->value('ID_DEPT');
 
@@ -1862,7 +1919,7 @@ END AS special_overtime_hours
                                     continue;
                                 }
 
-                                $section = DB::table('sections')
+                                $section = \App\Support\CompanyQuery::table('sections')
                                     ->whereRaw('id = ?', [(int) $employee->SECTION])
                                     ->select('line_start', 'line_end')
                                     ->first();
@@ -1874,7 +1931,7 @@ END AS special_overtime_hours
                                 $lineStart = $section->line_start;
                                 $lineEnd   = $section->line_end;
 
-                                $grouped = DB::table('employee_line_assignments as ela')
+                                $grouped = \App\Support\CompanyQuery::table('employee_line_assignments as ela')
                                     ->join('line_efficiencies as le', function ($join) {
                                         $join->on('le.period_id', '=', 'ela.period_id')
                                             ->on('le.date', '=', 'ela.start_date');
@@ -1931,7 +1988,7 @@ END AS special_overtime_hours
 
                                 $jumlahLineCount = empty($assignedValidDates)
                                     ? 0
-                                    : (int) DB::table('line_efficiencies')
+                                    : (int) \App\Support\CompanyQuery::table('line_efficiencies')
                                         ->where('period_id', $period->id)
                                         ->whereIn('date', $assignedValidDates)
                                         ->whereBetween('line_number', [$lineStart, $lineEnd])
@@ -1951,7 +2008,7 @@ END AS special_overtime_hours
                                         continue;
                                     }
 
-                                    $lines = DB::table('line_efficiencies')
+                                    $lines = \App\Support\CompanyQuery::table('line_efficiencies')
                                         ->where('period_id', $period->id)
                                         ->where('date', $day->date)
                                         ->whereBetween('line_number', [$lineStart, $lineEnd])
@@ -1985,7 +2042,7 @@ END AS special_overtime_hours
                             }
                         }
                     } else if ($component->code === 'qc_insentif') {
-                        $assignmentNpk = DB::table('employee_qc_assignments as ela')
+                        $assignmentNpk = \App\Support\CompanyQuery::table('employee_qc_assignments as ela')
                             ->select('ela.npk', 'ela.role')
                             ->where('ela.period_id', $period->id)
                             ->where('ela.npk', $employee->NPK)
@@ -2003,7 +2060,7 @@ END AS special_overtime_hours
                         | LOAD THRESHOLD
                         |----------------------------------------------------
                         */
-                        $thresholds = DB::table('insentif_thresholds')
+                        $thresholds = \App\Support\CompanyQuery::table('insentif_thresholds')
                             ->where('insentif_type', 'QC')
                             ->where('type', 'Percentage')
                             ->pluck('minimum', 'days');
@@ -2042,7 +2099,7 @@ END AS special_overtime_hours
                                 preg_match('/\d+/', $employee->DEPARTEMENT, $matches);
                                 $defaultLine = $matches[0] ?? null;
 
-                                $lineefficiencies = DB::table('employee_qc_assignments as ela')
+                                $lineefficiencies = \App\Support\CompanyQuery::table('employee_qc_assignments as ela')
                                     ->leftJoin('qc_efficiencies as le', function ($join) {
                                         $join->on('le.period_id', '=', 'ela.period_id')
                                             ->on('le.line_number', '=', 'ela.line_number')
@@ -2051,7 +2108,7 @@ END AS special_overtime_hours
                                     })
 
                                     ->leftJoinSub(
-                                        DB::table('employee_qc_assignments')
+                                        \App\Support\CompanyQuery::table('employee_qc_assignments')
                                             ->select(
                                                 'period_id',
                                                 'line_number',
@@ -2160,7 +2217,7 @@ END AS special_overtime_hours
                                     | QA LEADER dibagi jumlah third_party di tanggal tsb.
                                     |--------------------------------------------------------------------------
                                     */
-                                    $qaRawAll = DB::table('employee_qc_assignments')
+                                    $qaRawAll = \App\Support\CompanyQuery::table('employee_qc_assignments')
                                         ->where('npk', $employee->NPK)
                                         ->where('period_id', $period->id)
                                         ->where('role', $assignment->role)
@@ -2192,7 +2249,7 @@ END AS special_overtime_hours
                                     $qaShareByDateBuyer = [];
 
                                     if ($qaBlank->isNotEmpty()) {
-                                        $qaBuyersByDate = DB::table('qc_efficiencies')
+                                        $qaBuyersByDate = \App\Support\CompanyQuery::table('qc_efficiencies')
                                             ->where('period_id', $period->id)
                                             ->where('dept', 'qa')
                                             ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
@@ -2206,7 +2263,7 @@ END AS special_overtime_hours
                                                 ->unique(fn($b) => strtoupper($b))
                                                 ->values());
 
-                                        $qaOtherStaff = DB::table('employee_qc_assignments')
+                                        $qaOtherStaff = \App\Support\CompanyQuery::table('employee_qc_assignments')
                                             ->where('period_id', $period->id)
                                             ->whereIn('role', ['qa', 'qa_leader'])
                                             ->where('npk', '!=', $employee->NPK)
@@ -2219,7 +2276,7 @@ END AS special_overtime_hours
                                             ->groupBy(fn($r) => substr((string) $r->start_date, 0, 10) . '|' . strtoupper(trim((string) $r->buyer)))
                                             ->map(fn($rows) => $rows->pluck('npk')->unique()->count());
 
-                                        $qaThirdPartyCountByDateBuyer = DB::table('qc_efficiencies')
+                                        $qaThirdPartyCountByDateBuyer = \App\Support\CompanyQuery::table('qc_efficiencies')
                                             ->where('period_id', $period->id)
                                             ->where('dept', 'qa')
                                             ->whereIn('date', $qaBlank->pluck('date')->unique()->values()->all())
@@ -2297,7 +2354,7 @@ END AS special_overtime_hours
                                     }
 
                                     // Semua qc_efficiencies yang dibutuhkan, sekali query.
-                                    $qaEffByKey = DB::table('qc_efficiencies')
+                                    $qaEffByKey = \App\Support\CompanyQuery::table('qc_efficiencies')
                                         ->where('period_id', $period->id)
                                         ->where('dept', 'qa')
                                         ->whereIn('date', $qaAssignments->pluck('date')->unique()->all())
@@ -2306,7 +2363,7 @@ END AS special_overtime_hours
                                         ->groupBy(fn($row) => substr((string) $row->date, 0, 10) . '|' . strtoupper(trim((string) $row->buyer)));
 
                                     // Buyer yang punya baris third party di periode ini (mis. MUJI).
-                                    $qaBuyerHasThirdParty = DB::table('qc_efficiencies')
+                                    $qaBuyerHasThirdParty = \App\Support\CompanyQuery::table('qc_efficiencies')
                                         ->where('period_id', $period->id)
                                         ->where('dept', 'qa')
                                         ->whereIn('buyer', $qaAssignments->pluck('buyer')->unique()->all())
@@ -2431,7 +2488,7 @@ END AS special_overtime_hours
                                     }
                                 } else {
 
-                                    $section = DB::table('sections')
+                                    $section = \App\Support\CompanyQuery::table('sections')
                                         ->whereRaw('id = ?', [(int) $employee->SECTION])
                                         ->select('line_start', 'line_end', 'blank_line')
                                         ->first();
@@ -2443,7 +2500,7 @@ END AS special_overtime_hours
                                     $lineStart = $section->line_start;
                                     $lineEnd   = $section->line_end;
 
-                                    $grouped = DB::table('employee_qc_assignments as ela')
+                                    $grouped = \App\Support\CompanyQuery::table('employee_qc_assignments as ela')
                                         ->join('qc_efficiencies as le', function ($join) {
                                             $join->on('le.period_id', '=', 'ela.period_id')
                                                 ->on('le.date', '=', 'ela.start_date')
@@ -2483,7 +2540,7 @@ END AS special_overtime_hours
                                     $collectionDay = collect([]);
                                     $collectionLines = collect([]);
 
-                                    // $jumlahLine = DB::table('qc_efficiencies')
+                                    // $jumlahLine = \App\Support\CompanyQuery::table('qc_efficiencies')
                                     //     ->where('period_id', $period->id)
                                     //     ->whereBetween('date', [$period->start_date, $period->end_date])
                                     //     ->whereBetween('line_number', [$lineStart, $lineEnd])
@@ -2504,7 +2561,7 @@ END AS special_overtime_hours
                                             continue;
                                         }
 
-                                        $lines = DB::table('qc_efficiencies')
+                                        $lines = \App\Support\CompanyQuery::table('qc_efficiencies')
                                             ->where('period_id', $period->id)
                                             ->where('dept', 'qc')
                                             ->where('date', $day->date)
@@ -2560,7 +2617,7 @@ END AS special_overtime_hours
                             );
 
                         if ($padTkkOk) {
-                            $padRolesForNpk = DB::table('pad_efficiencies')
+                            $padRolesForNpk = \App\Support\CompanyQuery::table('pad_efficiencies')
                                 ->where('period_id', $period->id)
                                 ->where('npk', $employee->NPK)
                                 ->whereIn('role', function ($q) {
@@ -2629,7 +2686,7 @@ END AS special_overtime_hours
                             );
 
                         if ($cuttingTkkOk) {
-                            $rolesForNpk = DB::table('employee_cutting_assignments')
+                            $rolesForNpk = \App\Support\CompanyQuery::table('employee_cutting_assignments')
                                 ->where('period_id', $period->id)
                                 ->where('npk', $employee->NPK)
                                 ->whereIn('role', function ($q) {
@@ -2661,13 +2718,13 @@ END AS special_overtime_hours
                         // Disamakan dengan HeatInsentifMasterController: sekali per role
                         // yang benar-benar dimiliki NPK ini di heat_efficiencies periode
                         // ini, lalu dijumlah (setara mergeInsentifByNpk di controller).
-                        $rolesForNpk = DB::table('heat_efficiencies')
+                        $rolesForNpk = \App\Support\CompanyQuery::table('heat_efficiencies')
                             ->where('npk', $employee->NPK)
                             ->where('period_id', $period->id)
                             ->whereBetween('date', [$period->start_date, $period->end_date])
                             // controller: hanya role yang ada di insentif_role_formulas
                             // (joinSub irf di check()) yang dihitung.
-                            ->whereIn('role', DB::table('insentif_role_formulas')->select('role'))
+                            ->whereIn('role', \App\Support\CompanyQuery::table('insentif_role_formulas')->select('role'))
                             ->pluck('role')
                             ->filter()
                             ->unique();
@@ -2817,7 +2874,7 @@ END AS special_overtime_hours
                         ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
                         ? (
                             Str::ucfirst(Str::lower($employee->type)) === 'Contract'
-                            ? ((float) $employee->salary)
+                            ? (float) $employee->salary
                             : ((float) $employee->salary)
                             // Str::ucfirst(Str::lower($employee->type)) === 'Contract'
                             // ? (float) $employee->salary
@@ -2931,12 +2988,12 @@ END AS special_overtime_hours
             DB::transaction(function () use ($periodStart, $periodEnd) {
 
                 // Hapus data payroll lembur pada periode yang akan digenerate
-                DB::table('overtimes_payroll')
+                \App\Support\CompanyQuery::table('overtimes_payroll')
                     ->whereBetween('OVERTIME_DATE', [$periodStart, $periodEnd])
                     ->delete();
 
                 // Insert ulang dari tabel overtimes
-                DB::table('overtimes_payroll')->insertUsing(
+                \App\Support\CompanyQuery::table('overtimes_payroll')->insertUsing(
                     [
                         'NPK',
                         'NAMA_KARYAWAN',
@@ -2948,7 +3005,7 @@ END AS special_overtime_hours
                         'DAY',
                         'DEPT_GROUP',
                     ],
-                    DB::table('overtimes')
+                    \App\Support\CompanyQuery::table('overtimes')
                         ->select(
                             'NPK',
                             'NAMA_KARYAWAN',
@@ -3087,7 +3144,7 @@ END AS special_overtime_hours
             return $this->qcViolationBuyerCache[$cacheKey];
         }
 
-        $query = DB::table('qc_violations')->where('period_id', $periodId);
+        $query = \App\Support\CompanyQuery::table('qc_violations')->where('period_id', $periodId);
 
         if (Schema::hasColumn('qc_violations', 'buyer')) {
             $query->where(function ($q) use ($buyerKey) {
@@ -3477,7 +3534,7 @@ END AS special_overtime_hours
 
         // Assignment difilter berdasarkan $role yang sedang dihitung, supaya
         // tanggal role lain (mis. operator lalu jadi leader) tidak tercampur.
-        $assignments = DB::table('pad_efficiencies')
+        $assignments = \App\Support\CompanyQuery::table('pad_efficiencies')
             ->where('npk', $employee->NPK)
             ->where('period_id', $period->id)
             ->where('role', $role)
@@ -3516,7 +3573,7 @@ END AS special_overtime_hours
 
         // Roster operator adalah denominator tetap (kolom B:W di Excel), mencakup
         // operator tanpa hasil (nilai 0), bukan hanya yang punya piece positif.
-        $operatorRoster = DB::table('pad_efficiencies')
+        $operatorRoster = \App\Support\CompanyQuery::table('pad_efficiencies')
             ->where('period_id', $period->id)
             ->where('role', 'operator')
             ->select('npk')
@@ -3543,7 +3600,7 @@ END AS special_overtime_hours
                 (string) $operator->npk => 0.0,
             ])->all();
 
-            $operatorRows = DB::table('pad_efficiencies')
+            $operatorRows = \App\Support\CompanyQuery::table('pad_efficiencies')
                 ->where('period_id', $period->id)
                 ->where('role', 'operator')
                 ->whereBetween('date', [$startDate, $endDate])
@@ -3631,7 +3688,7 @@ END AS special_overtime_hours
             ? Carbon::parse($employee->TKK)->format('Y-m-d')
             : null;
 
-        $overtimes = DB::table('overtimes')
+        $overtimes = \App\Support\CompanyQuery::table('overtimes')
             ->where('NPK', $employee->NPK)
             ->whereBetween('OVERTIME_DATE', [
                 $period->start_date,
@@ -3659,7 +3716,7 @@ END AS special_overtime_hours
         // 🔹 PERBAIKAN (tim): assignment SELALU difilter per $role (sama seperti
         // PadInsentifMasterController::calculatePad), jadi hasilnya
         // deterministik dan tanggal role lain tidak ikut tercampur.
-        $assignments = DB::table('heat_efficiencies')
+        $assignments = \App\Support\CompanyQuery::table('heat_efficiencies')
             ->where('npk', $employee->NPK)
             ->where('period_id', $period->id)
             ->where('role', $role)
@@ -3706,7 +3763,7 @@ END AS special_overtime_hours
                     $segments[$segKey] = ['total' => 0, 'npks' => []];
                 }
 
-                $operatorQuery = DB::table('heat_efficiencies')
+                $operatorQuery = \App\Support\CompanyQuery::table('heat_efficiencies')
                     ->where('period_id', $period->id)
                     ->where('role', '=', 'operator')
                     ->where('date', $date);
@@ -3757,7 +3814,7 @@ END AS special_overtime_hours
             ? Carbon::parse($employee->TKK)->format('Y-m-d')
             : null;
 
-        $overtimes = DB::table('overtimes')
+        $overtimes = \App\Support\CompanyQuery::table('overtimes')
             ->where('NPK', $employee->NPK)
             ->whereBetween('OVERTIME_DATE', [
                 $period->start_date,
@@ -3780,14 +3837,14 @@ END AS special_overtime_hours
             return false;
         };
 
-        $employeeDates = DB::table('employee_cutting_assignments')
+        $employeeDates = \App\Support\CompanyQuery::table('employee_cutting_assignments')
             ->where('period_id', $period->id)
             ->where('npk', $employee->NPK)
             ->pluck('start_date')
             ->unique()
             ->toArray();
 
-        $cuttingEfficiencies = DB::table('cutting_efficiencies')
+        $cuttingEfficiencies = \App\Support\CompanyQuery::table('cutting_efficiencies')
             ->where('period_id', $period->id)
             ->whereBetween('date', [$period->start_date, $period->end_date])
             ->whereIn('date', $employeeDates)
