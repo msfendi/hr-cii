@@ -1546,6 +1546,8 @@ END AS special_overtime_hours
                 'bpjsketex' => (float) $employee->percentket,
                 'is_excepkes'  => $employee->is_excepkes === null ? 0 : (float) $employee->is_excepkes,
                 'is_exceptk'  => $employee->is_exceptk === null ? 0 : (float) $employee->is_exceptk,
+                'tkk_month'      => $tkk->month,
+                'tmk_month'      => $tmk->month,
                 'bpjs_base' => (
                     ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
                     ? (
@@ -2813,6 +2815,8 @@ END AS special_overtime_hours
                     'is_excepkes'  => $employee->is_excepkes === null ? 0 : (float) $employee->is_excepkes,
                     'is_exceptk'  => $employee->is_exceptk === null ? 0 : (float) $employee->is_exceptk,
                     'percentage'     => (float) $employee->percentage,
+                    'tkk_month'      => $tkk->month,
+                    'tmk_month'      => $tmk->month,
                     'bpjs_base' => (
                         ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
                         ? (
