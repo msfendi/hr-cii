@@ -1550,8 +1550,8 @@ END AS special_overtime_hours
                     ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
                     ? (
                         Str::ucfirst(Str::lower($employee->type)) === 'Contract'
-                        ? ((float) $employee->salary + (float) $employee->allowance)
-                        : ((float) $employee->salary + (float) $employee->allowance)
+                        ? ((float) $employee->salary)
+                            : ((float) $employee->salary)
                     )
                     : (
                         (
@@ -2817,8 +2817,8 @@ END AS special_overtime_hours
                         ($employee->IS_STAFF == '1' || $employee->IS_EXPAT == '1')
                         ? (
                             Str::ucfirst(Str::lower($employee->type)) === 'Contract'
-                            ? ((float) $employee->salary + (float) $employee->allowance)
-                            : ((float) $employee->salary + (float) $employee->allowance)
+                            ? ((float) $employee->salary)
+                            : ((float) $employee->salary)
                             // Str::ucfirst(Str::lower($employee->type)) === 'Contract'
                             // ? (float) $employee->salary
                             // : ((float) $employee->daily_salary * (float) $count_days)
