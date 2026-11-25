@@ -1602,6 +1602,7 @@ Route::prefix('izin-meninggalkan')->name('izin-meninggalkan.')->group(function (
     Route::get('/', [IjinMeninggalkanController::class, 'dashboard'])->name('dashboard');
     Route::get('/form', [IjinMeninggalkanController::class, 'form'])->name('form');
     Route::post('/submit', [IjinMeninggalkanController::class, 'submit'])->name('submit');
+    Route::get('/qr/{id}', [IjinMeninggalkanController::class, 'qr'])->name('qr');
 });
 
 // Admin: approval bertingkat (auth Laravel, NPK user = approver).

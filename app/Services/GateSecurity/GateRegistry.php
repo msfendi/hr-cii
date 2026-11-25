@@ -2,6 +2,7 @@
 
 namespace App\Services\GateSecurity;
 
+use App\Services\IzinMeninggalkan\IzinMeninggalkanGateAdapter;
 use App\Services\WorkAssignment\WorkAssignmentGateAdapter;
 
 /**
@@ -18,7 +19,8 @@ class GateRegistry
      * @var array<string, class-string<GateDocument>>
      */
     private const DOCUMENTS = [
-        WorkAssignmentGateAdapter::DOC_TYPE => WorkAssignmentGateAdapter::class,
+        WorkAssignmentGateAdapter::DOC_TYPE  => WorkAssignmentGateAdapter::class,
+        IzinMeninggalkanGateAdapter::DOC_TYPE => IzinMeninggalkanGateAdapter::class,
     ];
 
     /**

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\IjinMeninggalkanRequest;
+use App\Services\GateSecurity\GateQr;
+use App\Services\IzinMeninggalkan\IzinMeninggalkanGateAdapter;
 use App\Services\WorkAssignment\ApprovalChainBuilder;
 use App\Services\WorkAssignment\EmployeeLookupService;
 use Illuminate\Http\Request;
@@ -231,6 +233,39 @@ class IjinMeninggalkanController extends Controller
         );
 
         return redirect()->route('izin-meninggalkan.dashboard');
+    }
+
+    /**
+     * Kembalikan QR pengajuan sebagai data URI SVG (dipakai modal riwayat).
+     */
+    public function qr(Request $request, int $id)
+    {
+        $npk = $this->resolveNpk();
+
+        if (!$npk) {
+            return response()->json(['ok' => false, 'message' => 'Sesi berakhir.'], 401);
+        }
+
+        $req = IjinMeninggalkanRequest::find($id);
+
+        if (!$req || (string) $req->npk !== (string) $npk) {
+            return response()->json(['ok' => false, 'message' => 'Pengajuan tidak ditemukan.'], 404);
+        }
+
+        $payload = GateQr::payloadFor(new IzinMeninggalkanGateAdapter($req));
+        $uri     = GateQr::dataUri($payload, 240);
+
+        if ($uri === null) {
+            return response()->json(['ok' => false, 'message' => 'Gagal membuat QR.'], 500);
+        }
+
+        return response()->json([
+            'ok'     => true,
+            'id'     => $req->id,
+            'image'  => $uri,
+            'stage'  => $req->securityStage(),
+            'status' => $req->status,
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────

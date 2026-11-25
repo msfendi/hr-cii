@@ -219,6 +219,13 @@
 
                         <div class="im-actions" style="display:flex;align-items:center;gap:.45rem;">
                             <span class="im-badge {{ $progress['tone'] }}">{{ $progress['label'] }}</span>
+                            @if ($req->isReadyForSecurity())
+                                <button type="button" class="im-toggle" data-im-qr="{{ $req->id }}"
+                                        title="Tampilkan QR untuk Security"
+                                        style="background:#f3f7fe;border-color:#cfdcef;color:#1b3a6b;">
+                                    <i class="fas fa-qrcode" aria-hidden="true"></i> QR
+                                </button>
+                            @endif
                             <button type="button" class="im-toggle" data-im-toggle aria-expanded="false">
                                 Detail <i class="fas fa-chevron-down" style="font-size:.6rem;"></i>
                             </button>
@@ -286,17 +293,71 @@
 
 @include('layout.footerscript')
 
+<div class="im-qr-modal" id="im-qr-modal" hidden style="position:fixed;inset:0;z-index:1080;display:flex;align-items:center;justify-content:center;padding:1.1rem;">
+    <div data-im-qr-close style="position:absolute;inset:0;background:rgba(14,26,43,.62);"></div>
+    <div role="dialog" aria-modal="true" aria-labelledby="im-qr-title" style="position:relative;background:#fff;border-radius:.9rem;box-shadow:0 1.2rem 3rem rgba(10,22,40,.32);width:100%;max-width:360px;padding:1.2rem;text-align:center;">
+        <button type="button" data-im-qr-close aria-label="Tutup" style="position:absolute;top:.45rem;right:.6rem;border:0;background:transparent;font-size:1.5rem;line-height:1;color:#8b98ad;cursor:pointer;">&times;</button>
+        <h6 id="im-qr-title" style="font-weight:800;margin:0 0 .2rem;color:#1b3a6b;">QR Izin Meninggalkan</h6>
+        <div style="font-size:.76rem;color:#6b7688;margin-bottom:.85rem;">Tunjukkan ke petugas security saat keluar &amp; kembali</div>
+        <div id="im-qr-img" style="width:240px;height:240px;margin:0 auto .65rem;display:flex;align-items:center;justify-content:center;border:1px solid #e5e9f2;border-radius:.6rem;padding:.5rem;background:#fff;">
+            <span style="font-size:.8rem;color:#8b98ad;">Memuat&hellip;</span>
+        </div>
+        <div style="font-weight:800;color:#22344d;font-size:.9rem;">#<span id="im-qr-id">-</span></div>
+        <div id="im-qr-stage" style="font-size:.75rem;color:#6b7688;margin-top:.2rem;"></div>
+    </div>
+</div>
+<style>.im-qr-modal[hidden] { display: none !important; }</style>
+
 <script>
 document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-im-toggle]');
-    if (!btn) { return; }
+    if (btn) {
+        var item   = btn.closest('.im-item');
+        var detail = item.querySelector('[data-im-detail]');
+        var open   = btn.getAttribute('aria-expanded') === 'true';
 
-    var item   = btn.closest('.im-item');
-    var detail = item.querySelector('[data-im-detail]');
-    var open   = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+        detail.hidden = open;
+        return;
+    }
 
-    btn.setAttribute('aria-expanded', open ? 'false' : 'true');
-    detail.hidden = open;
+    var qrBtn = e.target.closest('[data-im-qr]');
+    if (qrBtn) {
+        var id       = qrBtn.getAttribute('data-im-qr');
+        var modal    = document.getElementById('im-qr-modal');
+        var imgBox   = document.getElementById('im-qr-img');
+        var idBox    = document.getElementById('im-qr-id');
+        var stageBox = document.getElementById('im-qr-stage');
+        var urlTmpl  = @json(route('izin-meninggalkan.qr', ['id' => '__ID__']));
+
+        idBox.textContent = id;
+        stageBox.textContent = '';
+        imgBox.innerHTML = '<span style="font-size:.8rem;color:#8b98ad;">Memuat&hellip;</span>';
+        modal.hidden = false;
+
+        fetch(urlTmpl.replace('__ID__', encodeURIComponent(id)), {
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data || !data.ok) {
+                imgBox.innerHTML = '<span style="font-size:.8rem;color:#a12622;">' + ((data && data.message) || 'Gagal memuat QR.') + '</span>';
+                return;
+            }
+            imgBox.innerHTML = '<img src="' + data.image + '" alt="QR #' + id + '" style="width:100%;height:100%;display:block;">';
+            var stageLabel = data.stage === 'out' ? 'Menunggu scan KELUAR'
+                : (data.stage === 'in' ? 'Menunggu scan KEMBALI' : 'Keluar & kembali sudah tercatat');
+            stageBox.textContent = stageLabel;
+        })
+        .catch(function () {
+            imgBox.innerHTML = '<span style="font-size:.8rem;color:#a12622;">Gagal memuat QR.</span>';
+        });
+        return;
+    }
+
+    if (e.target.closest('[data-im-qr-close]')) {
+        document.getElementById('im-qr-modal').hidden = true;
+    }
 });
 </script>
 
