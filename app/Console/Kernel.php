@@ -51,10 +51,23 @@ class Kernel extends ConsoleKernel
         // Cek pending leave approval tiap 5 jam, kirim notif WA ke approver
         // Interval bisa diubah: everyThirtyMinutes(), hourly(), everyFiveHours(), dll.
         $schedule->command('approval:check-pending')
-            ->everyFiveHours()
+            ->cron('0 */5 * * *')
             ->withoutOverlapping()
             ->timezone('Asia/Jakarta')
             ->appendOutputTo(storage_path('logs/approval-wa.log'));
+
+        // Tutup hari: kalau sampai 17:00 karyawan (Izin Dinas / Izin Meninggalkan)
+        // belum tercatat kembali oleh Security, jam_kembali diisi 17:00 supaya
+        // rekap absensi & potongan payroll tetap terbentuk.
+        $schedule->command('izin:auto-fill-jam-kembali --time=17:00')
+            ->dailyAt('17:00')
+            ->timezone('Asia/Jakarta')
+            ->withoutOverlapping()
+            ->name('izin-auto-fill-jam-kembali')
+            ->onFailure(function () {
+                Log::error('Command izin:auto-fill-jam-kembali failed');
+            })
+            ->appendOutputTo(storage_path('logs/izin-auto-fill-jam-kembali.log'));
     }
 
     /**
