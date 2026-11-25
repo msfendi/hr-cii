@@ -57,55 +57,7 @@ class GeneratePayrollProcess implements ShouldQueue
 
     public function handle()
     {
-        // Job antrean berjalan tanpa session/user, jadi gerbang company_id
-        // tidak punya konteks. Konteks cabang diambil dari run/periode supaya
-        // proses hanya menyentuh data cabang pemilik run.
-        return $this->inCompanyContext(false, function () {
-            $this->processPayroll(false);
-        });
-    }
-
-    /**
-     * Jalankan callback dengan konteks cabang milik run/periode.
-     */
-    private function inCompanyContext(bool $isCheck, callable $callback)
-    {
-        $companyId = $this->resolveCompanyId($isCheck);
-
-        return \App\Support\CompanyQuery::forCompany($companyId, function () use ($companyId, $callback) {
-            return \App\Services\TenantContext::runAs($companyId, $callback);
-        });
-    }
-
-    /**
-     * Cabang pemilik run/periode.
-     *
-     * Urutan: payroll_runs.company_id -> payroll_periods.company_id ->
-     * session cabang aktif (mode check dari HTTP) -> cabang default.
-     */
-    private function resolveCompanyId(bool $isCheck): int
-    {
-        $companyId = 0;
-        $periodId = null;
-
-        if (!$isCheck) {
-            $run = PayrollRun::find($this->runId);
-            $companyId = (int) ($run->company_id ?? 0);
-            $periodId = $run->period_id ?? null;
-        } else {
-            $periodId = $this->runId;
-        }
-
-        if ($companyId <= 0 && $periodId) {
-            $period = PayrollPeriod::find($periodId);
-            $companyId = (int) ($period->company_id ?? 0);
-        }
-
-        if ($companyId <= 0) {
-            $companyId = (int) session('active_company_id', 0);
-        }
-
-        return $companyId > 0 ? $companyId : TenantContext::companyIdOrDefault();
+        $this->processPayroll(false);
     }
 
     /**
@@ -115,9 +67,7 @@ class GeneratePayrollProcess implements ShouldQueue
      */
     public function simulation($npk = null)
     {
-        return $this->inCompanyContext(true, function () use ($npk) {
-            return $this->processPayroll(true, $npk ?? $this->npk);
-        });
+        return $this->processPayroll(true, $npk ?? $this->npk);
     }
 
     /**
@@ -1625,6 +1575,8 @@ END AS special_overtime_hours
                 'tkk_in_period' => $isTkkInPeriod,
                 'tkk_day'        => $tkk ? (float) $tkk->day : 0,
                 'has_tkk'        => $tkk ? 1 : 0,
+                'tkk_month'      => $tkk->month,
+                'tmk_month'      => $tmk->month,
                 // BARU — dipakai formula pinalty_deduction (karyawan SPD)
                 'is_spd'         => $isSpdPinalty,
                 'is_agreement_signed' => $isAgreementSigned,
@@ -2906,6 +2858,8 @@ END AS special_overtime_hours
                     'tanggungan' => $employee->TANGGUNGAN,
                     'keterangan' => $employee->KETERANGAN,
                     'components' => $componentsWithType,
+                    'tkk_month'      => $tkk->month,
+                    'tmk_month'      => $tmk->month,
                     'payroll_adjustment_details' => ($payrollAdjustmentDetails[$employee->NPK] ?? collect())
                         ->values(),
 
