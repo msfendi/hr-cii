@@ -14,6 +14,7 @@ class SatisfactionResponse extends Model
         'question_id',
         'score',
         'answer_text',
+        'submission_id',
     ];
 
     protected $casts = [

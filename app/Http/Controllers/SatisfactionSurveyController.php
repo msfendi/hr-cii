@@ -180,10 +180,12 @@ class SatisfactionSurveyController extends Controller
     {
         try {
             app(\App\Services\SatisfactionSurveyAiAnalysisService::class)->analyze();
-            return redirect()->route('satisfaction-survey.admin.results')->with('success', 'Analisis AI berhasil dibuat dan disimpan.');
+            return redirect()->route('satisfaction-survey.admin.results')
+                ->with('ai_analysis_success', 'Analisis AI berhasil dibuat dan disimpan.');
         } catch (\Throwable $e) {
             Log::warning('Satisfaction survey AI analysis failed: ' . $e->getMessage());
-            return redirect()->route('satisfaction-survey.admin.results')->withErrors(['ai_analysis' => 'Analisis AI gagal dibuat. Periksa ketersediaan jawaban dan konfigurasi provider.']);
+            return redirect()->route('satisfaction-survey.admin.results')
+                ->withErrors(['ai_analysis' => 'Analisis AI gagal dibuat: ' . $e->getMessage()]);
         }
     }
 

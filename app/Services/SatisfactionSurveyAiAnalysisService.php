@@ -49,7 +49,7 @@ class SatisfactionSurveyAiAnalysisService
             ->post($config['base_url'], [
                 'model' => $config['model'],
                 'messages' => [
-                    ['role' => 'system', 'content' => 'Anda analis kepuasan karyawan. Ringkas, faktual, dan kembalikan JSON valid saja.'],
+                    ['role' => 'system', 'content' => 'Anda analis kepuasan karyawan. Tulis semua title dan summary dalam Bahasa Indonesia yang ringkas dan faktual. Kembalikan JSON valid saja.'],
                     ['role' => 'user', 'content' => $prompt],
                 ],
                 'temperature' => 0.2,
@@ -139,6 +139,7 @@ class SatisfactionSurveyAiAnalysisService
             . "B. Rata-rata skor Likert 1-5 per pertanyaan, sudah diurutkan dari yang TERBURUK.\n\n"
             . "Tugas: tentukan tepat 3 masalah utama dari A dan tepat 3 masalah utama dari B.\n"
             . "Untuk B, dasarkan kesimpulan pada pertanyaan dengan rata-rata rendah dan jumlah jawaban skor 1-2.\n"
+            . "Gunakan Bahasa Indonesia untuk semua title dan summary.\n"
             . "Jangan mengarang data di luar masukan. Balas hanya JSON dengan bentuk:\n"
             . "{\"answers\":[{\"title\":string,\"summary\":string,\"evidence_count\":integer}],"
             . "\"scores\":[{\"title\":string,\"summary\":string,\"question_id\":integer,\"average_score\":number}]}\n\n"

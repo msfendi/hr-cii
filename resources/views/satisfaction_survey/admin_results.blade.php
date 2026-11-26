@@ -166,9 +166,9 @@
                         <span class="ai-chip"><i class="fas fa-brain"></i> AI Analysis</span>
                         <h6 class="m-0 font-weight-bold text-gray-800">Tiga Masalah Utama</h6>
                     </div>
-                    <form method="POST" action="{{ route('satisfaction-survey.admin.results.analyze') }}">
+                    <form method="POST" action="{{ route('satisfaction-survey.admin.results.analyze') }}" id="aiAnalyzeForm">
                         @csrf
-                        <button type="submit" class="btn btn-sm btn-primary">
+                        <button type="submit" class="btn btn-sm btn-primary" id="aiAnalyzeButton">
                             <i class="fas fa-wand-magic-sparkles mr-1"></i>{{ $aiAnalysis ? 'Perbarui Analisis' : 'Buat Analisis' }}
                         </button>
                     </form>
@@ -796,6 +796,51 @@
       }
     });
   });
+})();
+</script>
+@php
+    $aiFlashSuccess = session('ai_analysis_success');
+    $aiFlashError = isset($errors) && $errors->has('ai_analysis') ? $errors->first('ai_analysis') : null;
+@endphp
+<script>
+(function () {
+  if (typeof Swal === 'undefined') return;
+
+  var form = document.getElementById('aiAnalyzeForm');
+  if (form) {
+    form.addEventListener('submit', function () {
+      Swal.fire({
+        title: 'AI sedang menganalisis',
+        html: 'Membaca jawaban esai dan skor terendah, lalu menyusun tiga masalah utama.'
+          + '<br><span style="font-size:.82rem;color:#858796;">Proses ini bisa memakan waktu. Jangan tutup halaman.</span>',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: function () { Swal.showLoading(); }
+      });
+    });
+  }
+
+  var successMessage = @json($aiFlashSuccess ?? null);
+  var errorMessage = @json($aiFlashError ?? null);
+
+  if (successMessage) {
+    Swal.fire({
+      icon: 'success',
+      title: 'Analisis selesai',
+      text: successMessage,
+      confirmButtonText: 'OK',
+      confirmButtonColor: '#4e73df'
+    });
+  } else if (errorMessage) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Analisis gagal',
+      text: errorMessage,
+      confirmButtonText: 'OK',
+      confirmButtonColor: '#4e73df'
+    });
+  }
 })();
 </script>
 </body>
