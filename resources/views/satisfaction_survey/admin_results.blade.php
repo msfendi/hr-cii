@@ -178,11 +178,12 @@
                         $analysisPayload = $aiAnalysis && is_array($aiAnalysis->analysis_json) ? $aiAnalysis->analysis_json : [];
                         $answerProblems = $analysisPayload['answers'] ?? $analysisPayload['problems'] ?? [];
                         $scoreProblems = $analysisPayload['scores'] ?? [];
+                        $topRequests = $analysisPayload['requests'] ?? [];
                     @endphp
 
-                    @if($aiAnalysis && (count($answerProblems) || count($scoreProblems)))
+                    @if($aiAnalysis && (count($answerProblems) || count($scoreProblems) || count($topRequests)))
                         <div class="row">
-                            <div class="col-lg-6 mb-3 mb-lg-0">
+                            <div class="col-lg-4 mb-3 mb-lg-0">
                                 <div class="ai-panel">
                                     <div class="ai-panel-head">
                                         <span class="ai-panel-icon"><i class="fas fa-comment-dots"></i></span>
@@ -207,7 +208,34 @@
                                     </ol>
                                 </div>
                             </div>
-                            <div class="col-lg-6">
+                            <div class="col-lg-4 mb-3 mb-lg-0">
+                                <div class="ai-panel">
+                                    <div class="ai-panel-head">
+                                        <span class="ai-panel-icon"><i class="fas fa-hand-point-up"></i></span>
+                                        <div>
+                                            <div class="ai-panel-title">Top 3 Permintaan Karyawan</div>
+                                            <div class="ai-panel-sub">dari answer_text</div>
+                                        </div>
+                                    </div>
+                                    <ol class="ai-list">
+                                        @forelse($topRequests as $req)
+                                            <li class="ai-item">
+                                                <span class="ai-rank">{{ $loop->iteration }}</span>
+                                                <div>
+                                                    <div class="ai-item-title">{{ $req['title'] ?? 'Permintaan' }}</div>
+                                                    <div class="ai-item-text">{{ $req['summary'] ?? '' }}</div>
+                                                    @if(isset($req['evidence_count']))
+                                                        <span class="ai-metric">{{ (int) $req['evidence_count'] }} sebutan</span>
+                                                    @endif
+                                                </div>
+                                            </li>
+                                        @empty
+                                            <li class="ai-item ai-item-empty">Belum ada data permintaan. Klik Perbarui Analisis.</li>
+                                        @endforelse
+                                    </ol>
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
                                 <div class="ai-panel">
                                     <div class="ai-panel-head">
                                         <span class="ai-panel-icon"><i class="fas fa-star-half-alt"></i></span>
@@ -254,28 +282,6 @@
                     @endif
                     @if(isset($errors) && $errors->has('ai_analysis'))<div class="alert alert-warning mt-2 mb-0">{{ $errors->first('ai_analysis') }}</div>@endif
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card shadow mb-4">
-        <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Ringkasan per Pertanyaan</h6></div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered table-sm" id="dataTable">
-                    <thead><tr><th>Bagian</th><th>Pertanyaan</th><th width="110">Tipe</th><th width="110">Jumlah Jawab</th><th width="110">Rata-rata Likert</th></tr></thead>
-                    <tbody>
-                    @foreach($stats as $q)
-                        <tr>
-                            <td>{{ $q->section }}</td>
-                            <td>{{ $q->question_text }}</td>
-                            <td>{{ $q->question_type === 'likert' ? 'Likert 1–5' : 'Open' }}</td>
-                            <td>{{ $q->responses_count }}</td>
-                            <td>{{ $q->question_type === 'likert' ? (isset($avg[$q->id]) && $avg[$q->id] !== null ? number_format($avg[$q->id], 2) : '—') : '—' }}</td>
-                        </tr>
-                    @endforeach
-                    </tbody>
-                </table>
             </div>
         </div>
     </div>
@@ -591,20 +597,133 @@
         </div>
     </div>
 
+    @php
+        $likertStats = $stats->where('question_type', 'likert')->values();
+        $likertAnswerSum = 0;
+        $likertAvgSum = 0.0;
+        $likertAvgCount = 0;
+        foreach ($likertStats as $lq) {
+            $likertAnswerSum += (int) $lq->responses_count;
+            if (isset($avg[$lq->id]) && $avg[$lq->id] !== null) {
+                $likertAvgSum += (float) $avg[$lq->id];
+                $likertAvgCount++;
+            }
+        }
+        $likertOverallAvg = $likertAvgCount > 0 ? $likertAvgSum / $likertAvgCount : null;
+    @endphp
+    <style>
+        /* Distribusi Likert — chart inline */
+        #likertTable td, #likertTable th { vertical-align: middle; }
+        #likertTable td.lq-cell { font-size: .84rem; line-height: 1.35; }
+        #likertTable .badge-section { background: #f1f3f9; color: #3a3b45; border: 1px solid #e3e6f0; font-weight: 600; font-size: .75rem; }
+        #likertTable_wrapper .dataTables_filter input { border: 1px solid #d1d3e2; border-radius: 4px; padding: .25rem .5rem; }
+        .lq-avg-pill { display: inline-block; min-width: 42px; text-align: center; border-radius: 20px; padding: 2px 8px; font-size: .8rem; font-weight: 700; color: #fff; }
+        .lq-avg-danger  { background: #e74a3b; }
+        .lq-avg-warning { background: #f6c23e; color: #5a4000; }
+        .lq-avg-success { background: #1cc88a; }
+        .lq-avg-none    { background: #adb5bd; }
+        .lq-legend { display: flex; flex-wrap: wrap; gap: .6rem .9rem; font-size: .77rem; color: #5a5c69; margin-bottom: .75rem; }
+        .lq-legend span { display: inline-flex; align-items: center; gap: 5px; }
+        .lq-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+        .lq-swatch-1 { background: #e74a3b; }
+        .lq-swatch-2 { background: #f6c23e; }
+        .lq-swatch-3 { background: #4e73df; }
+        .lq-swatch-4 { background: #1cc88a; }
+        .lq-swatch-5 { background: #36b9cc; }
+        /* CSS stacked bar — no JS needed */
+        .lq-bar-wrap { display: flex; height: 20px; border-radius: 3px; overflow: hidden; width: 100%; max-width: 260px; background: #f1f3f9; }
+        .lq-seg { height: 100%; transition: width .2s; }
+        .lq-seg-1 { background: #e74a3b; }
+        .lq-seg-2 { background: #f6c23e; }
+        .lq-seg-3 { background: #4e73df; }
+        .lq-seg-4 { background: #1cc88a; }
+        .lq-seg-5 { background: #36b9cc; }
+    </style>
     <div class="card shadow mb-4">
-        <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Distribusi Likert per Pertanyaan (skala 1–5)</h6></div>
+        <div class="card-header py-3 d-flex flex-wrap justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Distribusi Likert per Pertanyaan (skala 1–5)</h6>
+            <span class="small text-muted">
+                {{ $likertStats->count() }} pertanyaan ·
+                {{ number_format($likertAnswerSum, 0, ',', '.') }} jawaban ·
+                rata-rata {{ $likertOverallAvg !== null ? number_format($likertOverallAvg, 2) : '—' }} / 5
+            </span>
+        </div>
         <div class="card-body">
-            <div class="row">
-            @foreach($stats->where('question_type', 'likert') as $q)
-                <div class="col-xl-6 col-md-12 mb-4">
-                    <div class="font-weight-bold small mb-2">{{ $q->section }}. {{ $q->question_text }}</div>
-                    <div style="height:220px;position:relative;"><canvas id="chartQ{{ $q->id }}"></canvas></div>
-                    <div class="small text-muted mt-1">Rata-rata: {{ isset($avg[$q->id]) && $avg[$q->id] ? number_format($avg[$q->id],2) : '—' }} · Total: {{ $q->responses_count }}</div>
-                </div>
-            @endforeach
-            </div>
-            @if($stats->where('question_type','likert')->isEmpty())
+            @if($likertStats->isEmpty())
                 <p class="text-muted mb-0">Belum ada pertanyaan Likert aktif.</p>
+            @else
+                <div class="lq-legend">
+                    <span><span class="lq-swatch lq-swatch-1"></span>1 — Sangat Kurang</span>
+                    <span><span class="lq-swatch lq-swatch-2"></span>2 — Kurang</span>
+                    <span><span class="lq-swatch lq-swatch-3"></span>3 — Cukup</span>
+                    <span><span class="lq-swatch lq-swatch-4"></span>4 — Baik</span>
+                    <span><span class="lq-swatch lq-swatch-5"></span>5 — Sangat Baik</span>
+                </div>
+
+                {{-- Siapkan data JSON untuk chart inline --}}
+                @php
+                    $lqChartData = [];
+                    foreach ($likertStats as $q) {
+                        $rowDist = $dist[$q->id] ?? [];
+                        $counts = [];
+                        for ($s = 1; $s <= 5; $s++) {
+                            $counts[] = (int) ($rowDist[$s] ?? $rowDist[(string)$s] ?? 0);
+                        }
+                        $lqChartData[$q->id] = $counts;
+                    }
+                @endphp
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0" id="likertTable">
+                        <thead>
+                            <tr>
+                                <th style="width:40px">No</th>
+                                <th style="width:100px">Bagian</th>
+                                <th>Pertanyaan</th>
+                                <th style="width:260px">Distribusi</th>
+                                <th style="width:80px" class="text-center">Rata-rata</th>
+                                <th style="width:76px" class="text-center">Jawaban</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach($likertStats as $i => $q)
+                            @php
+                                $counts  = $lqChartData[$q->id];
+                                $rowSum  = array_sum($counts);
+                                $rowAvg  = isset($avg[$q->id]) && $avg[$q->id] !== null ? round((float)$avg[$q->id], 2) : null;
+                                $avgCls  = $rowAvg === null ? 'lq-avg-none' : ($rowAvg >= 4 ? 'lq-avg-success' : ($rowAvg >= 3 ? 'lq-avg-warning' : 'lq-avg-danger'));
+                                $avgText = $rowAvg !== null ? number_format($rowAvg, 2) : '—';
+                            @endphp
+                            <tr>
+                                <td class="text-muted">{{ $i + 1 }}</td>
+                                <td><span class="badge badge-section">{{ $q->section }}</span></td>
+                                <td class="lq-cell">{{ $q->question_text }}</td>
+                                <td>
+                                    @if($rowSum === 0)
+                                        <span class="text-muted small">Belum ada jawaban</span>
+                                    @else
+                                        <div class="lq-bar-wrap">
+                                            @foreach($counts as $si => $cnt)
+                                                @if($cnt > 0)
+                                                    <div class="lq-seg lq-seg-{{ $si + 1 }}"
+                                                         style="width:{{ round($cnt / $rowSum * 100, 1) }}%"
+                                                         title="{{ $si + 1 }} {{ ['Sangat Kurang','Kurang','Cukup','Baik','Sangat Baik'][$si] }}: {{ $cnt }} ({{ round($cnt / $rowSum * 100, 1) }}%)"></div>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </td>
+                                <td class="text-center" data-order="{{ $rowAvg !== null ? number_format($rowAvg, 2, '.', '') : -1 }}">
+                                    <span class="lq-avg-pill {{ $avgCls }}">{{ $avgText }}</span>
+                                </td>
+                                <td class="text-center" data-order="{{ $rowSum }}">
+                                    <span class="text-muted small">{{ number_format($rowSum, 0, ',', '.') }}</span>
+                                </td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
             @endif
         </div>
     </div>
@@ -615,7 +734,28 @@
 </div>
 <script src="{{ asset('vendor/datatables/jquery.dataTables.min.js') }}"></script>
 <script src="{{ asset('vendor/datatables/dataTables.bootstrap4.min.js') }}"></script>
-<script>$(function(){ $('#dataTable').DataTable({ pageLength:10 }); if ($('#paketTable').length) $('#paketTable').DataTable({ pageLength:10, order:[[0,'desc']] }); });</script>
+<script>
+$(function(){
+  if ($('#paketTable').length) $('#paketTable').DataTable({ pageLength:10, order:[[0,'desc']] });
+  if ($('#likertTable').length) {
+    $('#likertTable').DataTable({
+      pageLength: 10,
+      lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'Semua']],
+      order: [[4, 'asc']],
+      columnDefs: [{ orderable: false, targets: [3] }],
+      language: {
+        search: 'Cari pertanyaan:',
+        lengthMenu: 'Tampilkan _MENU_ pertanyaan',
+        info: 'Menampilkan _START_–_END_ dari _TOTAL_ pertanyaan',
+        infoEmpty: 'Tidak ada pertanyaan',
+        infoFiltered: '(disaring dari _MAX_ pertanyaan)',
+        zeroRecords: 'Pertanyaan tidak ditemukan',
+        paginate: { previous: 'Sebelumnya', next: 'Berikutnya' }
+      }
+    });
+  }
+});
+</script>
 @if(isset($paketModalPayload))
 <script>
 (function(){
@@ -763,41 +903,6 @@
 })();
 </script>
 @endif
-<script>
-(function(){
-  var dist = @json($dist instanceof \Illuminate\Support\Collection ? $dist->all() : $dist);
-  Object.keys(dist).forEach(function(qid){
-    var el = document.getElementById('chartQ' + qid);
-    if (!el) return;
-    var d = dist[qid];
-    var labels = [1,2,3,4,5];
-    var data = labels.map(function(s){ return d[s] || d[String(s)] || 0; });
-    new Chart(el, {
-      type: 'bar',
-      data: {
-        labels: ['1','2','3','4','5'],
-        datasets: [{
-          label: 'Jumlah responden',
-          data: data,
-          backgroundColor: ['#e74a3b','#f6c23e','#4e73df','#1cc88a','#36b9cc'],
-          borderColor: '#fff'
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        scales: {
-          x: { title: { display: true, text: 'Skala Likert' }, ticks: { stepSize: 1 } },
-          y: { beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } }
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: function(c){ return c.parsed.y + ' responden'; } } }
-        }
-      }
-    });
-  });
-})();
-</script>
 @php
     $aiFlashSuccess = session('ai_analysis_success');
     $aiFlashError = isset($errors) && $errors->has('ai_analysis') ? $errors->first('ai_analysis') : null;
