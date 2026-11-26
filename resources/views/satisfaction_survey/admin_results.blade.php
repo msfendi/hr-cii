@@ -804,19 +804,62 @@
 @endphp
 <script>
 (function () {
-  if (typeof Swal === 'undefined') return;
+  var SWEETALERT_ASSET = @json(asset('vendor/sweetalert/sweetalert.all.js'));
+  var pending = [];
+  var loading = false;
+
+  function flush() {
+    loading = false;
+    var callbacks = pending.slice();
+    pending.length = 0;
+    callbacks.forEach(function (callback) {
+      try { callback(window.Swal); } catch (error) { console.error(error); }
+    });
+  }
+
+  // Halaman ini tidak selalu memuat SweetAlert lewat @include('sweetalert::alert')
+  // karena paket hanya mencetak <script> saat ada session alert.config.
+  // Jadi aset dimuat di sini bila window.Swal belum tersedia.
+  function withSwal(callback) {
+    if (window.Swal && typeof window.Swal.fire === 'function') {
+      callback(window.Swal);
+      return;
+    }
+    pending.push(callback);
+    if (loading) return;
+    loading = true;
+
+    var script = document.createElement('script');
+    script.src = SWEETALERT_ASSET;
+    script.async = false;
+    script.onload = flush;
+    script.onerror = function () {
+      console.error('SweetAlert gagal dimuat dari ' + SWEETALERT_ASSET);
+      flush();
+    };
+    document.head.appendChild(script);
+  }
 
   var form = document.getElementById('aiAnalyzeForm');
   if (form) {
-    form.addEventListener('submit', function () {
-      Swal.fire({
-        title: 'AI sedang menganalisis',
-        html: 'Membaca jawaban esai dan skor terendah, lalu menyusun tiga masalah utama.'
-          + '<br><span style="font-size:.82rem;color:#858796;">Proses ini bisa memakan waktu. Jangan tutup halaman.</span>',
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        showConfirmButton: false,
-        didOpen: function () { Swal.showLoading(); }
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (form.getAttribute('data-submitting') === '1') return;
+      form.setAttribute('data-submitting', '1');
+
+      withSwal(function (Swal) {
+        if (Swal && typeof Swal.fire === 'function') {
+          Swal.fire({
+            title: 'AI sedang menganalisis',
+            html: 'Membaca jawaban esai dan skor terendah, lalu menyusun tiga masalah utama.'
+              + '<br><span style="font-size:.82rem;color:#858796;">Proses ini bisa memakan waktu. Jangan tutup halaman.</span>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: function () { Swal.showLoading(); }
+          });
+        }
+        form.submit();
       });
     });
   }
@@ -825,20 +868,26 @@
   var errorMessage = @json($aiFlashError ?? null);
 
   if (successMessage) {
-    Swal.fire({
-      icon: 'success',
-      title: 'Analisis selesai',
-      text: successMessage,
-      confirmButtonText: 'OK',
-      confirmButtonColor: '#4e73df'
+    withSwal(function (Swal) {
+      if (!Swal) return;
+      Swal.fire({
+        icon: 'success',
+        title: 'Analisis selesai',
+        text: successMessage,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#4e73df'
+      });
     });
   } else if (errorMessage) {
-    Swal.fire({
-      icon: 'error',
-      title: 'Analisis gagal',
-      text: errorMessage,
-      confirmButtonText: 'OK',
-      confirmButtonColor: '#4e73df'
+    withSwal(function (Swal) {
+      if (!Swal) return;
+      Swal.fire({
+        icon: 'error',
+        title: 'Analisis gagal',
+        text: errorMessage,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#4e73df'
+      });
     });
   }
 })();

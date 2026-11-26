@@ -61,12 +61,23 @@ class SatisfactionSurveyAiAnalysisService
             throw new RuntimeException('9router gagal memproses analisis survei (HTTP ' . $request->status() . ').');
         }
 
-        $content = trim((string) data_get($request->json(), 'choices.0.message.content', ''));
-        $content = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $content);
-        $decoded = json_decode($content, true);
+        $content = $this->extractContent($request->json());
+        $decoded = $this->decodePayload($content);
 
-        $answerProblems = $this->validProblems($decoded['answers'] ?? null, 'answers');
-        $scoreProblems = $this->validProblems($decoded['scores'] ?? null, 'scores');
+        $answerProblems = $this->normalizeProblems(
+            $decoded['answers'] ?? $decoded['answer_problems'] ?? $decoded['problems'] ?? $decoded['top_answers'] ?? null,
+            'answers',
+            $content
+        );
+        $scoreProblems = $this->normalizeProblems(
+            $decoded['scores'] ?? $decoded['score_problems'] ?? $decoded['top_scores'] ?? null,
+            'scores',
+            $content
+        );
+
+        if ($answerProblems === [] && $scoreProblems === []) {
+            throw new RuntimeException('9router tidak mengembalikan masalah yang bisa dibaca. Cuplikan jawaban: ' . mb_substr($content, 0, 300));
+        }
 
         if (!Schema::connection((new SatisfactionSurveyAiAnalysis())->getConnectionName() ?: config('database.default'))
             ->hasTable('satisfaction_survey_ai_analyses')) {
@@ -171,20 +182,88 @@ class SatisfactionSurveyAiAnalysisService
         return $prompt;
     }
 
-    private function validProblems($problems, string $key): array
+    /**
+     * Sebagian provider mengirim content sebagai string, sebagian lagi sebagai
+     * array part. Keduanya diratakan menjadi teks.
+     */
+    private function extractContent($json): string
     {
-        if (!is_array($problems) || count($problems) !== 3) {
-            throw new RuntimeException("Jawaban 9router tidak berisi tepat tiga masalah pada bagian {$key}.");
+        $content = data_get($json, 'choices.0.message.content');
+
+        if (is_array($content)) {
+            $content = implode("\n", array_map(function ($part) {
+                if (is_string($part)) {
+                    return $part;
+                }
+                return is_array($part) ? (string) ($part['text'] ?? '') : '';
+            }, $content));
         }
 
-        foreach ($problems as $problem) {
-            if (!is_array($problem)
-                || trim((string) ($problem['title'] ?? '')) === ''
-                || trim((string) ($problem['summary'] ?? '')) === '') {
-                throw new RuntimeException("Struktur masalah pada bagian {$key} tidak lengkap.");
+        return trim((string) $content);
+    }
+
+    /**
+     * Model kadang membungkus JSON dengan pagar kode atau kalimat pembuka.
+     * Ambil objek JSON pertama yang valid.
+     */
+    private function decodePayload(string $content): array
+    {
+        $clean = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $content);
+        $clean = trim((string) $clean);
+
+        $direct = json_decode($clean, true);
+        if (is_array($direct)) {
+            return $direct;
+        }
+
+        $start = strpos($clean, '{');
+        $end = strrpos($clean, '}');
+        if ($start !== false && $end !== false && $end > $start) {
+            $slice = substr($clean, $start, $end - $start + 1);
+            $decoded = json_decode($slice, true);
+            if (is_array($decoded)) {
+                return $decoded;
             }
         }
 
-        return array_values($problems);
+        return [];
+    }
+
+    /**
+     * Menormalkan daftar masalah: nama field alternatif, maksimal tiga item,
+     * dan item yang tidak lengkap dibuang. Tiga item adalah target, bukan
+     * syarat mutlak: bila model hanya memberi dua, dua itu tetap disimpan.
+     */
+    private function normalizeProblems($problems, string $key, string $raw = ''): array
+    {
+        if (!is_array($problems)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($problems as $problem) {
+            if (!is_array($problem)) {
+                continue;
+            }
+
+            $title = trim((string) ($problem['title'] ?? $problem['problem'] ?? $problem['name'] ?? ''));
+            $summary = trim((string) ($problem['summary'] ?? $problem['description'] ?? $problem['detail'] ?? ''));
+            if ($title === '' || $summary === '') {
+                continue;
+            }
+
+            $item = ['title' => $title, 'summary' => $summary];
+
+            if ($key === 'answers') {
+                $item['evidence_count'] = (int) ($problem['evidence_count'] ?? $problem['count'] ?? 0);
+            } else {
+                $item['question_id'] = (int) ($problem['question_id'] ?? 0);
+                $item['average_score'] = round((float) ($problem['average_score'] ?? 0), 2);
+            }
+
+            $normalized[] = $item;
+        }
+
+        return array_slice($normalized, 0, 3);
     }
 }
