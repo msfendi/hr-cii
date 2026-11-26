@@ -33,6 +33,7 @@ class SatisfactionLikertDistributionExport implements FromCollection, WithHeadin
         $this->from = $from;
         $this->to = $to;
         $questions = SatisfactionQuestion::where('question_type', 'likert')
+            ->where('is_active', true)
             ->orderBy('sort_order')->orderBy('id')->get();
         $this->rows = collect();
         foreach ($questions as $q) {

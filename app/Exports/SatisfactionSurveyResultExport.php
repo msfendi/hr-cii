@@ -41,6 +41,7 @@ class SatisfactionSurveyResultExport implements FromCollection, WithHeadings, Wi
         $this->from = $from;
         $this->to = $to;
         $this->questions = SatisfactionQuestion::withCount('responses')
+            ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
@@ -48,7 +49,11 @@ class SatisfactionSurveyResultExport implements FromCollection, WithHeadings, Wi
 
     public function collection()
     {
-        $q = SatisfactionResponse::query()->with('question')->orderBy('created_at')->orderBy('id');
+        $q = SatisfactionResponse::query()
+            ->with('question')
+            ->whereHas('question', fn ($query) => $query->where('is_active', true))
+            ->orderBy('created_at')
+            ->orderBy('id');
         if ($this->from) {
             $q->whereDate('created_at', '>=', $this->from);
         }

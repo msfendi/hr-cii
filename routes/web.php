@@ -156,6 +156,7 @@ use App\Http\Controllers\LineJumperInsentifMasterController;
 
 Route::get('/', [HomeController::class, 'index'])->name('/');
 Route::get('/welcome', [HomeController::class, 'welcome'])->name('welcome');
+Route::get('/fitur-3d', [HomeController::class, 'fitur3d'])->name('fitur-3d');
 
 // Self Register Face Recognition (publik)
 Route::prefix('self-register-face')->name('self-register-face.')->group(function () {
@@ -191,10 +192,18 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/logout', [LoginController::class, 'logout'])->name('logout');
 
     // Multi-cabang: pindah konteks cabang aktif (K5)
-    Route::post('/company/switch', [\App\Http\Controllers\CompanySwitchController::class, 'switch'])->name('company.switch');
+    Route::post('/company/switch', [\App\Http\Controllers\CompanySwitchController::class, 'switch'])->name('company.switch')->middleware(['auth', 'permission']);
 
     // Multi-cabang: laporan konsolidasi lintas cabang (F6)
-    Route::get('/reports/multi-company', [\App\Http\Controllers\CompanyReportController::class, 'index'])->name('reports.multi-company');
+    Route::get('/reports/multi-company', [\App\Http\Controllers\CompanyReportController::class, 'index'])->name('reports.multi-company')->middleware(['auth', 'permission']);
+
+    // Multi-cabang: kelola data cabang (Manage Company)
+    Route::get('/company', [\App\Http\Controllers\CompanyController::class, 'index'])->name('company.index')->middleware(['auth', 'permission']);
+    Route::post('/company', [\App\Http\Controllers\CompanyController::class, 'store'])->name('company.store')->middleware(['auth', 'permission']);
+    Route::put('/company/{id}', [\App\Http\Controllers\CompanyController::class, 'update'])->name('company.update')->middleware(['auth', 'permission']);
+    Route::post('/company/{id}/toggle', [\App\Http\Controllers\CompanyController::class, 'toggle'])->name('company.toggle')->middleware(['auth', 'permission']);
+    Route::post('/company/{id}/devices', [\App\Http\Controllers\CompanyController::class, 'devicesStore'])->name('company.devices.store')->middleware(['auth', 'permission']);
+    Route::delete('/company/devices/{deviceId}', [\App\Http\Controllers\CompanyController::class, 'devicesDestroy'])->name('company.devices.destroy')->middleware(['auth', 'permission']);
 
     //Register
     Route::get('/register/create', [RegisterController::class, 'create'])->name('register.create')->middleware(['auth', 'permission']);
@@ -215,6 +224,9 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/biodata/show/{NPK}', [BiodataController::class, 'show'])->name('biodata.show')->middleware(['auth', 'permission']);
     Route::post('/biodata/update-photo/{NPK}', [BiodataController::class, 'updatePhoto'])->name('biodata.update-photo')->middleware(['auth', 'permission']);
     Route::get('/biodata/exit/{NPK}', [BiodataController::class, 'exit'])->name('biodata.exit')->middleware(['auth', 'permission']);
+    Route::get('/biodata/attendance-recap', [BiodataController::class, 'attendanceRecap'])->name('biodata.attendance-recap')->middleware(['auth', 'permission']);
+    Route::get('/biodata/qr-image/{npk}', [BiodataController::class, 'qrImage'])->name('biodata.qr-image')->middleware(['auth', 'permission']);
+    Route::get('/biodata/qr-download', [BiodataController::class, 'downloadQr'])->name('biodata.qr-download')->middleware(['auth', 'permission']);
     Route::get('/biodata/export', [BiodataController::class, 'export'])->name('biodata.export')->middleware(['auth', 'permission']);
     Route::get('/biodata/soft-files/{npk}', [BiodataController::class, 'getSoftFiles'])->name('biodata.soft-files')->middleware(['auth', 'permission']);
     Route::get('/biodata/generate-pdf/{npk}', [BiodataController::class, 'generatePdf'])->name('biodata.generate-pdf')->middleware(['auth', 'permission']);
@@ -304,6 +316,8 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/user/index', [UserController::class, 'index'])->name('user.index')->middleware(['auth', 'permission']);
     Route::get('/user/profile', [UserController::class, 'profile'])->name('user.profile');
     Route::post('/user/update', [UserController::class, 'update'])->name('user.update')->middleware(['auth', 'permission']);
+    Route::get('/user/{id}/company-access', [UserController::class, 'companyAccessShow'])->name('user.company-access.show')->middleware(['auth', 'permission']);
+    Route::post('/user/{id}/company-access', [UserController::class, 'companyAccessUpdate'])->name('user.company-access.update')->middleware(['auth', 'permission']);
     Route::get('/user/detail/{id}', [UserController::class, 'detail'])->name('user.detail')->middleware(['auth', 'permission']);
     Route::get('/user/delete/{id}', [UserController::class, 'delete'])->name('user.delete')->middleware(['auth', 'permission']);
     Route::get('/user/assign/{id}', [UserController::class, 'assign'])->name('user.assign')->middleware(['auth', 'permission']);
@@ -1832,6 +1846,7 @@ Route::middleware(['auth', 'permission'])->prefix('satisfaction-survey/admin')->
     Route::delete('/{id}', [SatisfactionSurveyController::class, 'adminDestroy'])->name('destroy');
     Route::post('/{id}/toggle', [SatisfactionSurveyController::class, 'adminToggle'])->name('toggle');
     Route::get('/results', [SatisfactionSurveyController::class, 'adminResults'])->name('results');
+    Route::post('/results/analyze', [SatisfactionSurveyController::class, 'analyzeSurvey'])->name('results.analyze');
     Route::get('/export', [SatisfactionSurveyController::class, 'adminExport'])->name('export');
     Route::get('/export-likert', [SatisfactionSurveyController::class, 'adminExportLikert'])->name('export-likert');
     Route::get('/export-likert-pdf', [SatisfactionSurveyController::class, 'adminExportLikertPdf'])->name('export-likert-pdf');

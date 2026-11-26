@@ -108,7 +108,7 @@ class ApplicantRegistrationService
 
             $isStaff = $recruitmentPos ? ($recruitmentPos->is_staff ?? 0) : 0;
 
-            $pelamarId = DB::connection('cii')->table('PELAMAR')->insertGetId([
+            $pelamarId = \App\Support\CompanyQuery::table('PELAMAR')->insertGetId([
                 'is_staff'         => $isStaff,
                 'NAMA'             => strtoupper($data['nama_lengkap'] ?? '-'),
                 'NIK'              => $data['nik']              ?? null,
@@ -195,7 +195,7 @@ class ApplicantRegistrationService
         } catch (\Throwable $e) {
             // Rollback: hapus baris PELAMAR + berkas yang sudah dipindahkan.
             try {
-                DB::connection('cii')->table('PELAMAR')->where('id', $pelamarId)->delete();
+                \App\Support\CompanyQuery::table('PELAMAR')->where('id', $pelamarId)->delete();
             } catch (\Throwable) {
                 // diabaikan
             }

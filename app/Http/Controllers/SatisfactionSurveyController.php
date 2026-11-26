@@ -8,6 +8,7 @@ use App\Models\SatisfactionResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\SatisfactionSurveyResultExport;
 use App\Exports\SatisfactionLikertDistributionExport;
@@ -16,8 +17,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 class SatisfactionSurveyController extends Controller
 {
     /**
-     * Halaman kuesioner — publik, anonim, mobile-first.
-     * Semua pertanyaan diambil dari DB (satisfaction_questions) sehingga bisa di-manage admin.
+     * Halaman kuesioner publik dengan jawaban tanpa identitas pribadi.
      */
     public function create()
     {
@@ -30,46 +30,37 @@ class SatisfactionSurveyController extends Controller
     public function store(Request $request)
     {
         $questionIds = SatisfactionQuestion::where('is_active', true)->pluck('id')->all();
-
-        // Validasi dinamis berdasar tipe pertanyaan di DB.
         $rules = [];
         foreach ($questionIds as $qid) {
             $q = SatisfactionQuestion::find($qid);
-            if ($q && $q->isLikert()) {
-                $rules["answers.{$qid}"] = 'required|integer|between:1,5';
-            } else {
-                $rules["answers.{$qid}"] = 'nullable|string|max:5000';
-            }
+            $rules["answers.{$qid}"] = $q && $q->isLikert()
+                ? 'required|integer|between:1,5'
+                : 'nullable|string|max:5000';
         }
         $rules['answers'] = 'required|array';
-
         $validated = $request->validate($rules);
 
         try {
             DB::transaction(function () use ($validated) {
+                $submissionId = Schema::hasColumn('satisfaction_responses', 'submission_id')
+                    ? (string) \Illuminate\Support\Str::uuid()
+                    : null;
+
                 foreach (($validated['answers'] ?? []) as $qid => $val) {
                     $q = SatisfactionQuestion::find($qid);
                     if (!$q) continue;
 
-                    if ($q->isLikert()) {
-                        SatisfactionResponse::create([
-                            'question_id' => $q->id,
-                            'score' => (int) $val,
-                            'answer_text' => null,
-                        ]);
-                    } else {
-                        // PERBAIKAN V32 (2026-11-09): bersihkan teks jawaban
-                        // sebelum disimpan. Mencegah control character (NUL),
-                        // payload yang keluar dari konteks HTML, dan
-                        // payload formula-injection yang nanti ikut ke file
-                        // Excel/CSV. Query tetap memakai binding Eloquent.
-                        $cleanText = SurveySanitizer::cleanText($val);
-                        SatisfactionResponse::create([
-                            'question_id' => $q->id,
-                            'score' => null,
-                            'answer_text' => $cleanText !== '' ? $cleanText : null,
-                        ]);
+                    $payload = [
+                        'question_id' => $q->id,
+                        'score' => $q->isLikert() ? (int) $val : null,
+                        'answer_text' => $q->isLikert()
+                            ? null
+                            : (SurveySanitizer::cleanText($val) ?: null),
+                    ];
+                    if ($submissionId !== null) {
+                        $payload['submission_id'] = $submissionId;
                     }
+                    SatisfactionResponse::create($payload);
                 }
             });
 
@@ -87,14 +78,7 @@ class SatisfactionSurveyController extends Controller
         }
     }
 
-    public function thanks()
-    {
-        return view('satisfaction_survey.thanks');
-    }
-
-    // -----------------------------------------------------------------
-    // Admin: manage pertanyaan (CRUD + reorder + aktif/nonaktif)
-    // -----------------------------------------------------------------
+    public function thanks() { return view('satisfaction_survey.thanks'); }
 
     public function adminIndex()
     {
@@ -104,18 +88,8 @@ class SatisfactionSurveyController extends Controller
 
     public function adminStore(Request $request)
     {
-        $request->validate([
-            'section' => 'required|string|max:50',
-            'question_text' => 'required|string',
-            'question_type' => 'required|in:likert,open',
-            'sort_order' => 'nullable|integer',
-        ]);
-
+        $request->validate(['section' => 'required|string|max:50', 'question_text' => 'required|string', 'question_type' => 'required|in:likert,open', 'sort_order' => 'nullable|integer']);
         $maxOrder = (int) (SatisfactionQuestion::max('sort_order') ?? 0);
-        // PERBAIKAN V32 (2026-11-09): bersihkan section & question_text.
-        // Section & teks pertanyaan dirender di halaman admin DAN ikut ke
-        // export Excel, jadi harus dibersihkan di server. Output encoding
-        // tetap dipakai sebagai lapis kedua.
         SatisfactionQuestion::create([
             'section' => SurveySanitizer::cleanSection($request->input('section')),
             'question_text' => SurveySanitizer::cleanQuestionText($request->input('question_text')),
@@ -123,21 +97,13 @@ class SatisfactionSurveyController extends Controller
             'sort_order' => $request->input('sort_order') !== null ? (int) $request->input('sort_order') : $maxOrder + 1,
             'is_active' => $request->boolean('is_active', true),
         ]);
-
         return back()->with('success', 'Pertanyaan ditambahkan.');
     }
 
     public function adminUpdate(Request $request, $id)
     {
         $q = SatisfactionQuestion::findOrFail($id);
-        $request->validate([
-            'section' => 'required|string|max:50',
-            'question_text' => 'required|string',
-            'question_type' => 'required|in:likert,open',
-            'sort_order' => 'nullable|integer',
-        ]);
-
-        // PERBAIKAN V32 (2026-11-09): sanitasi sama seperti adminStore.
+        $request->validate(['section' => 'required|string|max:50', 'question_text' => 'required|string', 'question_type' => 'required|in:likert,open', 'sort_order' => 'nullable|integer']);
         $q->update([
             'section' => SurveySanitizer::cleanSection($request->input('section')),
             'question_text' => SurveySanitizer::cleanQuestionText($request->input('question_text')),
@@ -145,7 +111,6 @@ class SatisfactionSurveyController extends Controller
             'sort_order' => $request->input('sort_order') !== null ? (int) $request->input('sort_order') : $q->sort_order,
             'is_active' => $request->boolean('is_active', true),
         ]);
-
         return back()->with('success', 'Pertanyaan diperbarui.');
     }
 
@@ -160,147 +125,106 @@ class SatisfactionSurveyController extends Controller
         $q = SatisfactionQuestion::findOrFail($id);
         $q->is_active = !$q->is_active;
         $q->save();
-
         return back()->with('success', $q->is_active ? 'Pertanyaan diaktifkan.' : 'Pertanyaan dinonaktifkan.');
     }
 
     public function adminResults()
     {
         $stats = SatisfactionQuestion::withCount('responses')
+            ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
 
-        // Total paket = 1 submit = 1 kelompok jawaban dalam window 2 detik yang sama.
-        // Bukan jumlah baris per-pertanyaan. Sekalian bangun list paket:
-        // tiap paket = waktu submit + semua jawaban + total terjawab.
-        $allResp = SatisfactionResponse::with('question')->orderBy('created_at')->orderBy('id')->get();
-        $paketCount = 0;
-        $paketList = collect();
-        $bucket = null;
-        $lastKey = null;
-        foreach ($allResp as $r) {
-            $cur = \Carbon\Carbon::parse($r->created_at);
-            if ($lastKey === null) {
-                $paketCount = 1;
-                $lastKey = $cur;
-                $bucket = [];
-            } elseif ($cur->diffInSeconds($lastKey) > 2) {
-                if ($bucket !== null) {
-                    $paketList->push($bucket);
-                }
-                $paketCount++;
-                $lastKey = $cur;
-                $bucket = [];
-            }
-            $bucket['waktu'] = $bucket['waktu'] ?? $cur;
-            $bucket['answers'][] = $r;
-        }
-        if ($bucket !== null) {
-            $paketList->push($bucket);
-        }
-        foreach ($paketList as &$pk) {
+        // Hanya jawaban untuk pertanyaan yang masih aktif yang ditampilkan.
+        $allResp = SatisfactionResponse::with('question')
+            ->whereHas('question', fn ($query) => $query->where('is_active', true))
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+        $paketList = app(\App\Services\SatisfactionSubmissionGrouper::class)->group($allResp)->map(function ($pk) {
             $waktu = $pk['waktu'] ?? now();
+            $answers = collect($pk['answers'] ?? []);
+            $likertScores = $answers->filter(fn ($r) => $r->question && $r->question->isLikert() && $r->score !== null)->pluck('score')->map(fn ($s) => (float) $s);
             $pk['waktu'] = $waktu;
             $pk['waktu_label'] = $waktu->format('Y-m-d H:i:s');
-            $pk['total'] = count($pk['answers'] ?? []);
-        }
-        unset($pk);
-        $paketList = $paketList->map(function ($pk) {
-            $pk['waktu_label'] = $pk['waktu_label'] ?? (isset($pk['waktu']) ? $pk['waktu']->format('Y-m-d H:i:s') : date('Y-m-d H:i:s'));
-            $pk['total'] = $pk['total'] ?? count($pk['answers'] ?? []);
+            $pk['waktu_tanggal'] = $waktu->format('d M Y');
+            $pk['waktu_jam'] = $waktu->format('H:i:s');
+            $pk['total'] = $answers->count();
+            $pk['likert_avg'] = $likertScores->isNotEmpty() ? round($likertScores->avg(), 2) : null;
+            $pk['open_count'] = $answers->filter(fn ($r) => $r->question && !$r->question->isLikert())->count();
             return $pk;
         });
-        $totalResponses = $paketCount;
+        $totalResponses = $paketList->count();
         $likert = $stats->where('question_type', 'likert');
         $avg = collect();
         $dist = collect();
         foreach ($likert as $q) {
             $avg[$q->id] = SatisfactionResponse::where('question_id', $q->id)->avg('score');
-            $rows = SatisfactionResponse::where('question_id', $q->id)
-                ->selectRaw('score, COUNT(*) as c')->groupBy('score')->pluck('c', 'score');
+            $rows = SatisfactionResponse::where('question_id', $q->id)->selectRaw('score, COUNT(*) as c')->groupBy('score')->pluck('c', 'score');
             $arr = [];
-            for ($s = 1; $s <= 5; $s++) {
-                $arr[$s] = (int) ($rows[$s] ?? 0);
-            }
+            for ($s = 1; $s <= 5; $s++) $arr[$s] = (int) ($rows[$s] ?? 0);
             $dist[$q->id] = $arr;
         }
 
-        return view('satisfaction_survey.admin_results', compact('stats', 'totalResponses', 'avg', 'dist', 'paketList'));
+        $aiAnalysis = null;
+        if (class_exists(\App\Models\SatisfactionSurveyAiAnalysis::class)
+            && Schema::hasTable('satisfaction_survey_ai_analyses')) {
+            $aiAnalysis = \App\Models\SatisfactionSurveyAiAnalysis::where('scope_key', 'all')->first();
+        }
+
+        return view('satisfaction_survey.admin_results', compact('stats', 'totalResponses', 'avg', 'dist', 'paketList', 'aiAnalysis'));
     }
 
-    /**
-     * Normalisasi filter tanggal export kuesioner.
-     *
-     * PERBAIKAN V36 (2026-11-12): nilai kosong = "export semua data" (sesuai
-     * keterangan di halaman hasil), jadi harus dinormalkan menjadi string kosong.
-     * Sebelumnya `$request->input('from')` mengembalikan null saat filter
-     * dikosongkan, dan null itu ditolak oleh konstruktor export bertipe
-     * `string` sehingga muncul TypeError (500) di /admin/export dan
-     * /admin/export-likert. Validasi 'nullable|date' tetap dipertahankan,
-     * hanya hasilnya yang dinormalkan.
-     *
-     * @return array{0:string,1:string} [$from, $to] format Y-m-d atau string kosong
-     */
+    public function analyzeSurvey(Request $request)
+    {
+        try {
+            app(\App\Services\SatisfactionSurveyAiAnalysisService::class)->analyze();
+            return redirect()->route('satisfaction-survey.admin.results')->with('success', 'Analisis AI berhasil dibuat dan disimpan.');
+        } catch (\Throwable $e) {
+            Log::warning('Satisfaction survey AI analysis failed: ' . $e->getMessage());
+            return redirect()->route('satisfaction-survey.admin.results')->withErrors(['ai_analysis' => 'Analisis AI gagal dibuat. Periksa ketersediaan jawaban dan konfigurasi provider.']);
+        }
+    }
+
     private function exportDateRange(Request $request): array
     {
-        return [
-            trim((string) $request->input('from', '')),
-            trim((string) $request->input('to', '')),
-        ];
+        return [trim((string) $request->input('from', '')), trim((string) $request->input('to', ''))];
     }
 
     public function adminExport(Request $request)
     {
-        $request->validate([
-            'from' => 'nullable|date',
-            'to'   => 'nullable|date|after_or_equal:from',
-        ]);
-
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date|after_or_equal:from']);
         [$from, $to] = $this->exportDateRange($request);
-        $file = 'hasil-kuesioner-kepuasan-' . now()->format('Ymd-His') . '.xlsx';
-
-        return Excel::download(new SatisfactionSurveyResultExport($from, $to), $file);
+        return Excel::download(new SatisfactionSurveyResultExport($from, $to), 'hasil-kuesioner-kepuasan-' . now()->format('Ymd-His') . '.xlsx');
     }
 
     public function adminExportLikert(Request $request)
     {
-        $request->validate([
-            'from' => 'nullable|date',
-            'to'   => 'nullable|date|after_or_equal:from',
-        ]);
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date|after_or_equal:from']);
         [$from, $to] = $this->exportDateRange($request);
-        $file = 'distribusi-likert-kuesioner-' . now()->format('Ymd-His') . '.xlsx';
-
-        return Excel::download(new SatisfactionLikertDistributionExport($from, $to), $file);
+        return Excel::download(new SatisfactionLikertDistributionExport($from, $to), 'distribusi-likert-kuesioner-' . now()->format('Ymd-His') . '.xlsx');
     }
 
     public function adminExportLikertPdf(Request $request)
     {
-        $request->validate([
-            'from' => 'nullable|date',
-            'to'   => 'nullable|date|after_or_equal:from',
-        ]);
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date|after_or_equal:from']);
         [$from, $to] = $this->exportDateRange($request);
-
         $questions = SatisfactionQuestion::where('question_type', 'likert')
+            ->where('is_active', true)
             ->orderBy('sort_order')->orderBy('id')->get();
         $avg = collect();
         $dist = collect();
         $totalAll = 0;
         foreach ($questions as $q) {
             $avg[$q->id] = SatisfactionResponse::where('question_id', $q->id)->avg('score');
-            $rows = SatisfactionResponse::where('question_id', $q->id)
-                ->selectRaw('score, COUNT(*) as c')->groupBy('score')->pluck('c', 'score');
+            $rows = SatisfactionResponse::where('question_id', $q->id)->selectRaw('score, COUNT(*) as c')->groupBy('score')->pluck('c', 'score');
             $arr = [];
-            for ($s = 1; $s <= 5; $s++) {
-                $arr[$s] = (int) ($rows[$s] ?? 0);
-            }
+            for ($s = 1; $s <= 5; $s++) $arr[$s] = (int) ($rows[$s] ?? 0);
             $dist[$q->id] = $arr;
             $totalAll += array_sum($arr);
         }
-
-        $pdf = Pdf::loadView('satisfaction_survey.admin_likert_pdf', compact('questions', 'avg', 'dist', 'totalAll', 'from', 'to'));
-        return $pdf->download('distribusi-likert-' . now()->format('Ymd-His') . '.pdf');
+        return Pdf::loadView('satisfaction_survey.admin_likert_pdf', compact('questions', 'avg', 'dist', 'totalAll', 'from', 'to'))
+            ->download('distribusi-likert-' . now()->format('Ymd-His') . '.pdf');
     }
 }
