@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\SurveySanitizer;
+use App\Support\SatisfactionSurveyGuard;
 use App\Models\SatisfactionQuestion;
 use App\Models\SatisfactionResponse;
 use Illuminate\Http\Request;
@@ -18,17 +19,58 @@ class SatisfactionSurveyController extends Controller
 {
     /**
      * Halaman kuesioner publik dengan jawaban tanpa identitas pribadi.
+     *
+     * Saat pertama dibuka, ID PERANGKAT dicek ke log pengisian. Bila perangkat
+     * itu sudah pernah mengirim pada bulan berjalan, form tidak dirender dan
+     * halaman menampilkan SweetAlert "Spam Detection".
+     *
+     * ID perangkat berasal dari cookie pertama-pihak (bukan IP/MAC, karena
+     * keduanya tidak bisa dipakai sebagai identitas - lihat SatisfactionSurveyGuard).
      */
-    public function create()
+    public function create(Request $request)
     {
+        // Pastikan perangkat punya ID (diisi cookie bila baru) sebelum dicek.
+        SatisfactionSurveyGuard::pastikanDevice($request);
+
+        $log = SatisfactionSurveyGuard::logTerakhir($request);
+
+        if ($log !== null) {
+            return response()->view('satisfaction_survey.create', [
+                'questions' => collect(),
+                'grouped' => collect(),
+                'blokir' => SatisfactionSurveyGuard::PESAN_SUDAH,
+                'blokirPada' => $log->created_at,
+            ]);
+        }
+
         $questions = SatisfactionQuestion::where('is_active', true)->orderBy('sort_order')->orderBy('id')->get();
         $grouped = $questions->groupBy('section');
 
-        return view('satisfaction_survey.create', compact('questions', 'grouped'));
+        return view('satisfaction_survey.create', [
+            'questions' => $questions,
+            'grouped' => $grouped,
+            'blokir' => null,
+            'blokirPada' => null,
+        ]);
     }
 
     public function store(Request $request)
     {
+        // Identitas perangkat dipastikan dulu supaya kunci yang dipakai untuk
+        // memblokir sama dengan yang dikirim balik sebagai cookie.
+        SatisfactionSurveyGuard::pastikanDevice($request);
+
+        // Penjaga 1: maksimal 3 percobaan kirim per perangkat per 30 hari.
+        if (SatisfactionSurveyGuard::terlaluBanyakPercobaan($request)) {
+            return $this->tolakSpam($request, SatisfactionSurveyGuard::PESAN_LIMIT, 429);
+        }
+        SatisfactionSurveyGuard::hitPercobaan($request);
+
+        // Penjaga 2: perangkat ini sudah mengirim pada bulan berjalan.
+        if (SatisfactionSurveyGuard::sudahMengisi($request)) {
+            return $this->tolakSpam($request, SatisfactionSurveyGuard::PESAN_SUDAH, 429);
+        }
+
         $questionIds = SatisfactionQuestion::where('is_active', true)->pluck('id')->all();
         $rules = [];
         foreach ($questionIds as $qid) {
@@ -40,11 +82,16 @@ class SatisfactionSurveyController extends Controller
         $rules['answers'] = 'required|array';
         $validated = $request->validate($rules);
 
+        $submissionId = Schema::hasColumn('satisfaction_responses', 'submission_id')
+            ? (string) \Illuminate\Support\Str::uuid()
+            : null;
+
         try {
-            DB::transaction(function () use ($validated) {
-                $submissionId = Schema::hasColumn('satisfaction_responses', 'submission_id')
-                    ? (string) \Illuminate\Support\Str::uuid()
-                    : null;
+            DB::transaction(function () use ($validated, $request, $submissionId) {
+                // Dicatat lebih dulu: bila perangkat yang sama menembus penjaga
+                // secara bersamaan, unique index menolak dan seluruh transaksi
+                // batal sehingga tidak ada jawaban ganda yang tersimpan.
+                SatisfactionSurveyGuard::catat($request, $submissionId, true);
 
                 foreach (($validated['answers'] ?? []) as $qid => $val) {
                     $q = SatisfactionQuestion::find($qid);
@@ -69,6 +116,18 @@ class SatisfactionSurveyController extends Controller
             }
 
             return redirect()->route('satisfaction-survey.thanks')->with('success', 'Terima kasih atas partisipasi Anda.');
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ($this->galatDuplikat($e)) {
+                return $this->tolakSpam($request, SatisfactionSurveyGuard::PESAN_SUDAH, 429);
+            }
+
+            Log::error('Satisfaction survey store: ' . $e->getMessage());
+
+            if ($request->ajax() || $request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Gagal menyimpan jawaban. Silakan coba lagi.'], 500);
+            }
+
+            return back()->withInput()->withErrors(['answers' => 'Gagal menyimpan jawaban. Silakan coba lagi.']);
         } catch (\Throwable $e) {
             Log::error('Satisfaction survey store: ' . $e->getMessage());
             if ($request->ajax() || $request->expectsJson()) {
@@ -76,6 +135,29 @@ class SatisfactionSurveyController extends Controller
             }
             return back()->withInput()->withErrors(['answers' => 'Gagal menyimpan jawaban. Silakan coba lagi.']);
         }
+    }
+
+    /** Balasan penolakan anti-spam: JSON untuk AJAX, flash + SweetAlert untuk form biasa. */
+    private function tolakSpam(Request $request, string $pesan, int $status)
+    {
+        if ($request->ajax() || $request->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'spam' => true,
+                'message' => $pesan,
+            ], $status);
+        }
+
+        return redirect()->route('satisfaction-survey.create')->with('spam_block', $pesan);
+    }
+
+    /** True bila exception berasal dari unique index anti-spam. */
+    private function galatDuplikat(\Throwable $e): bool
+    {
+        $pesan = $e->getMessage();
+
+        return str_contains($pesan, 'uq_survey_log_device_periode')
+            || str_contains($pesan, 'satisfaction_submission_logs');
     }
 
     public function thanks() { return view('satisfaction_survey.thanks'); }

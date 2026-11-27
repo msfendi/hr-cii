@@ -42,6 +42,19 @@
                 </div>
                 <div class="card-body p-4 p-md-5">
 
+                    @if (!empty($blokir))
+                        <div class="text-center py-4">
+                            <div class="mb-3" style="font-size:3rem;color:#e74a3b;"><i class="fas fa-ban"></i></div>
+                            <h5 class="font-weight-bold text-danger mb-2">Spam Detection</h5>
+                            <p class="text-muted mb-1">{{ $blokir }}</p>
+                            @if (!empty($blokirPada))
+                                <p class="small text-muted mb-0">Tercatat: {{ $blokirPada->timezone('Asia/Jakarta')->format('d-m-Y H:i') }} WIB</p>
+                            @endif
+                            <p class="small text-muted mt-3 mb-0">Kuesioner ini hanya boleh diisi satu kali per perangkat setiap bulan.</p>
+                            <a href="/" class="btn btn-outline-secondary mt-3"><i class="fas fa-arrow-left mr-1"></i> Kembali ke Beranda</a>
+                        </div>
+                    @else
+
                     <div class="alert alert-info small">
                         Berikan tanda centang (✓) pada salah satu pilihan: <strong>1</strong> Sangat Tidak Setuju · <strong>2</strong> Tidak Setuju · <strong>3</strong> Biasa Saja · <strong>4</strong> Setuju · <strong>5</strong> Sangat Setuju.
                         Jawab sesuai pengalaman Anda yang sebenarnya.
@@ -94,6 +107,7 @@
                             <div class="small text-muted mt-2">Pendapat Anda penting untuk menjadikan Chutex tempat kerja yang lebih baik. Terima kasih atas partisipasi Anda.</div>
                         </div>
                     </form>
+                    @endif
                 </div>
             </div>
             <div class="text-center mt-3"><a href="/" class="text-muted small"><i class="fas fa-arrow-left mr-1"></i> Kembali ke Beranda</a></div>
@@ -104,8 +118,23 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 (function(){
+  const pesanBlokir = @json($blokir ?? null);
+  const pesanFlash = @json(session('spam_block'));
+  if (pesanBlokir || pesanFlash) {
+    if (window.Swal) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Spam Detection',
+        text: pesanBlokir || pesanFlash,
+        confirmButtonText: 'Mengerti',
+        confirmButtonColor: '#e74a3b'
+      });
+    }
+  }
+
   const form = document.getElementById('surveyForm');
-  const total = {{ $questions->count() }};
+  if (!form) { return; }
+  const total = {{ (int) $questions->count() }};
   function updateProgress(){
     const answered = document.querySelectorAll('#surveyForm input[type=\"radio\"]:checked').length + document.querySelectorAll('#surveyForm textarea').length;
     // hitung textarea non-kosong saja untuk progress open
