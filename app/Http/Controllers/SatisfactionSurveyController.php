@@ -189,6 +189,33 @@ class SatisfactionSurveyController extends Controller
         }
     }
 
+    /**
+     * Detail komentar di balik angka sebutan pada panel Analisis AI.
+     *
+     * Dipanggil modal di halaman hasil: angka "N sebutan / N komentar" bisa
+     * diklik, lalu menampilkan komentar esai yang benar-benar cocok.
+     * Parameter: kategori (answers|requests|scores|departments|persons) dan
+     * index (nomor item, atau "total" untuk seluruh item sekaligus).
+     */
+    public function adminAnalysisComments(Request $request)
+    {
+        $kategori = (string) $request->query('kategori', '');
+        $index = $request->query('index', 'total');
+
+        try {
+            $detail = app(\App\Services\SatisfactionSurveyAiAnalysisService::class)
+                ->detailKomentar($kategori, is_string($index) ? $index : 'total');
+
+            return response()->json(array_merge(['ok' => true], $detail));
+        } catch (\InvalidArgumentException | \OutOfBoundsException $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            Log::warning('Satisfaction survey comment detail failed: ' . $e->getMessage());
+
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 400);
+        }
+    }
+
     private function exportDateRange(Request $request): array
     {
         return [trim((string) $request->input('from', '')), trim((string) $request->input('to', ''))];

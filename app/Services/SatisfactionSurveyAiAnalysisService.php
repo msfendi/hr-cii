@@ -4,10 +4,13 @@ namespace App\Services;
 
 use App\Models\SatisfactionResponse;
 use App\Models\SatisfactionSurveyAiAnalysis;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use InvalidArgumentException;
+use OutOfBoundsException;
 use RuntimeException;
 
 class SatisfactionSurveyAiAnalysisService
@@ -21,16 +24,7 @@ class SatisfactionSurveyAiAnalysisService
     {
         $config = config('chatbot.providers.router9', []);
 
-        $answers = SatisfactionResponse::query()
-            ->whereHas('question', fn ($query) => $query->where('is_active', true))
-            ->whereNotNull('answer_text')
-            ->whereRaw("LTRIM(RTRIM(answer_text)) <> ''")
-            ->orderBy('created_at')
-            ->orderBy('id')
-            ->pluck('answer_text')
-            ->map(fn ($answer) => trim((string) $answer))
-            ->filter()
-            ->values();
+        $answers = $this->komentarEsai();
 
         $scoreStats = $this->worstScoreStats();
 
@@ -67,6 +61,23 @@ class SatisfactionSurveyAiAnalysisService
             'answers'
         );
 
+        // Pihak yang paling banyak dikomentari: departemen dan personel.
+        // Nama diambil dari jawaban esai oleh model, tetapi JUMLAH sebutan
+        // dihitung ulang di sini dari teks komentar asli (lihat
+        // hitungSebutan), jadi angkanya bisa diperiksa dan tidak bergantung
+        // pada perkiraan model.
+        $departments = $this->normalizeProblems(
+            $decoded['departments'] ?? $decoded['departemen'] ?? $decoded['top_departments'] ?? null,
+            'pihak',
+            $answers
+        );
+        $persons = $this->normalizeProblems(
+            $decoded['persons'] ?? $decoded['personnel'] ?? $decoded['personel'] ??
+            $decoded['people'] ?? $decoded['top_persons'] ?? null,
+            'pihak',
+            $answers
+        );
+
         // Fallback: model membalas list flat (array of object/string), bukan nested.
         if ($answerProblems === [] && $scoreProblems === [] && $topRequests === [] && !empty($decoded)) {
             $flat = $this->normalizeProblems(array_values($decoded), 'answers');
@@ -75,7 +86,8 @@ class SatisfactionSurveyAiAnalysisService
             }
         }
 
-        if ($answerProblems === [] && $scoreProblems === [] && $topRequests === []) {
+        if ($answerProblems === [] && $scoreProblems === [] && $topRequests === []
+            && $departments === [] && $persons === []) {
             Log::warning('SatisfactionAI: format respons tidak dikenali', [
                 'keys' => array_keys($decoded),
                 'panjang_konten' => mb_strlen($content),
@@ -104,12 +116,180 @@ class SatisfactionSurveyAiAnalysisService
                     'answers'   => $answerProblems,
                     'scores'    => $scoreProblems,
                     'requests'  => $topRequests,
+                    'departments' => $departments,
+                    'persons'   => $persons,
                     // Kompatibilitas dengan analisis versi sebelumnya.
                     'problems'  => $answerProblems,
                 ],
                 'generated_at' => now(),
             ]
         );
+    }
+
+    /**
+     * Sumber komentar esai yang dianalisis: pertanyaan aktif dengan isi tidak
+     * kosong. Dipakai bersama oleh analyze() dan endpoint detail komentar,
+     * supaya angka sebutan di halaman selalu sama dengan daftar komentarnya.
+     */
+    public function komentarEsai(): Collection
+    {
+        return SatisfactionResponse::query()
+            ->whereHas('question', fn ($query) => $query->where('is_active', true))
+            ->whereNotNull('answer_text')
+            ->whereRaw("LTRIM(RTRIM(answer_text)) <> ''")
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->pluck('answer_text')
+            ->map(fn ($answer) => trim((string) $answer))
+            ->filter()
+            ->values();
+    }
+
+    /**
+     * Komentar esai beserta waktu kirim, untuk daftar di modal detail.
+     */
+    public function komentarEsaiDetail(): Collection
+    {
+        return SatisfactionResponse::query()
+            ->whereHas('question', fn ($query) => $query->where('is_active', true))
+            ->whereNotNull('answer_text')
+            ->whereRaw("LTRIM(RTRIM(answer_text)) <> ''")
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get(['id', 'answer_text', 'created_at'])
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'isi' => trim((string) $row->answer_text),
+                'waktu' => optional($row->created_at)->format('d M Y H:i'),
+            ])
+            ->filter(fn ($baris) => $baris['isi'] !== '')
+            ->values();
+    }
+
+    /**
+     * Rincian komentar di balik sebuah angka pada panel Analisis AI.
+     *
+     * $kategori salah satu dari answers|requests|scores|departments|persons,
+     * $index nomor item (0..n) atau 'total' untuk seluruh item sekaligus.
+     *
+     * Kategori departemen/personel dicocokkan lewat nama (dan alias) yang
+     * sama dengan penghitung sebutan, jadi jumlah di modal persis sama dengan
+     * angka yang tampil. Kategori masalah/permintaan dicocokkan lewat kata
+     * kunci judul — sifatnya perkiraan karena judul disusun AI, bukan kutipan.
+     */
+    public function detailKomentar(string $kategori, $index = 'total'): array
+    {
+        $kategori = strtolower(trim($kategori));
+
+        $label = [
+            'answers' => 'Dari Jawaban Esai',
+            'requests' => 'Top 3 Permintaan Karyawan',
+            'scores' => 'Dari Skor Terendah',
+            'departments' => 'Top 3 Departemen Paling Banyak Dikomentari',
+            'persons' => 'Top 3 Personel Paling Banyak Dikomentari',
+        ];
+
+        if (!isset($label[$kategori])) {
+            throw new InvalidArgumentException('Kategori analisis tidak dikenali: ' . $kategori);
+        }
+
+        $analisis = SatisfactionSurveyAiAnalysis::where('scope_key', 'all')->first();
+
+        if (!$analisis || !is_array($analisis->analysis_json)) {
+            throw new RuntimeException('Analisis AI belum tersedia. Klik Perbarui Analisis terlebih dahulu.');
+        }
+
+        $semua = $this->komentarEsaiDetail();
+
+        if ($kategori === 'scores') {
+            return [
+                'kategori' => $kategori,
+                'label' => $label[$kategori],
+                'mode' => 'tidak_ada',
+                'index' => 'total',
+                'judul' => '',
+                'total' => 0,
+                'total_semua_komentar' => $semua->count(),
+                'grup' => [],
+                'terpotong' => false,
+                'catatan' => 'Kategori ini berasal dari skor Likert, bukan komentar esai. Tidak ada teks komentar untuk ditampilkan.',
+            ];
+        }
+
+        $items = $analisis->analysis_json[$kategori] ?? [];
+        if ($kategori === 'answers' && $items === []) {
+            $items = $analisis->analysis_json['problems'] ?? [];
+        }
+        if (!is_array($items)) {
+            $items = [];
+        }
+
+        $mode = in_array($kategori, ['departments', 'persons'], true) ? 'sebutan' : 'kata_kunci';
+
+        $grupPerNomor = [];
+        foreach ($items as $nomor => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $judul = (string) ($item['title'] ?? '');
+            $alias = $this->normalisasiAlias($item['aliases'] ?? []);
+
+            $cocok = $mode === 'sebutan'
+                ? $this->komentarMenyebut($semua, $judul, $alias)
+                : $this->komentarMemuatKataKunci($semua, $judul);
+
+            $grupPerNomor[$nomor] = [
+                'index' => $nomor,
+                'judul' => $judul,
+                'summary' => (string) ($item['summary'] ?? ''),
+                'alias' => $alias,
+                'terverifikasi' => (bool) ($item['mention_verified'] ?? false),
+                'jumlah' => $cocok->count(),
+                'komentar' => $cocok->take(200)->values()->all(),
+            ];
+        }
+
+        $catatan = $mode === 'sebutan'
+            ? 'Dihitung dari komentar esai yang benar-benar memuat nama atau penyebutan lain (alias). Satu komentar dihitung satu kali.'
+            : 'Pencocokan memakai kata kunci pada judul, jadi sifatnya perkiraan — judul disusun AI dan tidak selalu berupa kutipan langsung komentar.';
+
+        if ($index === 'total' || $index === null || $index === '' || $index === '*') {
+            $grup = array_values($grupPerNomor);
+
+            return [
+                'kategori' => $kategori,
+                'label' => $label[$kategori],
+                'mode' => $mode,
+                'index' => 'total',
+                'judul' => '',
+                'total' => array_sum(array_column($grup, 'jumlah')),
+                'total_semua_komentar' => $semua->count(),
+                'grup' => $grup,
+                'terpotong' => false,
+                'catatan' => $catatan,
+            ];
+        }
+
+        $nomor = (int) $index;
+        if (!isset($grupPerNomor[$nomor])) {
+            throw new OutOfBoundsException('Item analisis nomor ' . $nomor . ' tidak ada pada kategori ' . $kategori . '.');
+        }
+
+        $satu = $grupPerNomor[$nomor];
+
+        return [
+            'kategori' => $kategori,
+            'label' => $label[$kategori],
+            'mode' => $mode,
+            'index' => $nomor,
+            'judul' => $satu['judul'],
+            'total' => $satu['jumlah'],
+            'total_semua_komentar' => $semua->count(),
+            'grup' => [$satu],
+            'terpotong' => $satu['jumlah'] > 200,
+            'catatan' => $catatan,
+        ];
     }
 
     /**
@@ -331,16 +511,22 @@ class SatisfactionSurveyAiAnalysisService
             . "Tugas:\n"
             . "1. Tentukan 3 masalah utama dari A (keluhan/kritik yang paling sering disebut).\n"
             . "2. Tentukan 3 permintaan/harapan karyawan dari A (hal yang paling banyak diminta karyawan).\n"
-            . "3. Tentukan 3 masalah utama dari B, dasarkan pada pertanyaan dengan rata-rata rendah dan jumlah jawaban skor 1-2.\n\n"
+            . "3. Tentukan 3 masalah utama dari B, dasarkan pada pertanyaan dengan rata-rata rendah dan jumlah jawaban skor 1-2.\n"
+            . "4. Tentukan 3 DEPARTEMEN/BAGIAN yang paling banyak dikomentari pada A (misalnya produksi, gudang, HRD, kantin, keamanan).\n"
+            . "5. Tentukan 3 PERSONEL/ORANG yang paling banyak dikomentari pada A (nama orang atau jabatan yang disebut jelas, misalnya nama pengawas, mandor, petugas).\n\n"
             . "ATURAN PENTING:\n"
-            . "- Selalu berikan TEPAT 3 item untuk setiap kategori (answers, requests, scores) selama datanya mencukupi.\n"
+            . "- Selalu berikan TEPAT 3 item untuk setiap kategori (answers, requests, scores, departments, persons) selama datanya mencukupi.\n"
             . "- Hanya bila data benar-benar kurang dari 3, berikan sebanyak yang tersedia (boleh kurang dari 3).\n"
+            . "- Untuk departments dan persons: tulis nama PERSIS seperti yang disebut di komentar (jangan diterjemahkan atau diganti istilah lain). Bila ada padanan penyebutan lain, isi pada aliases.\n"
+            . "- Untuk departments dan persons: bila TIDAK ADA komentar yang menyebut departemen atau orang tertentu dengan jelas, kembalikan array kosong [] - JANGAN mengarang nama.\n"
             . "- Setiap item WAJIB punya title dan summary yang berbeda satu sama lain (tidak boleh duplikat).\n"
             . "- Gunakan Bahasa Indonesia. Jangan menulis karakter Mandarin/Han/aksara non-Latin.\n"
             . "- Jangan mengarang data di luar masukan. Balas hanya JSON dengan bentuk:\n"
             . "{\"answers\":[{\"title\":string,\"summary\":string,\"evidence_count\":integer}],"
             . "\"requests\":[{\"title\":string,\"summary\":string,\"evidence_count\":integer}],"
-            . "\"scores\":[{\"title\":string,\"summary\":string,\"question_id\":integer,\"average_score\":number}]}\n\n"
+            . "\"scores\":[{\"title\":string,\"summary\":string,\"question_id\":integer,\"average_score\":number}],"
+            . "\"departments\":[{\"title\":string,\"summary\":string,\"evidence_count\":integer,\"aliases\":[string]}],"
+            . "\"persons\":[{\"title\":string,\"summary\":string,\"evidence_count\":integer,\"aliases\":[string]}]}\n\n"
             . "A. Jawaban esai:\n";
 
         if ($answers->isEmpty()) {
@@ -586,7 +772,7 @@ class SatisfactionSurveyAiAnalysisService
      * Menormalkan daftar masalah: nama field alternatif yang sangat luas,
      * deduplikasi, bersih dari aksara CJK, maksimal tiga item.
      */
-    private function normalizeProblems($problems, string $key): array
+    private function normalizeProblems($problems, string $key, ?Collection $sumber = null): array
     {
         if (!is_array($problems)) {
             return [];
@@ -640,22 +826,61 @@ class SatisfactionSurveyAiAnalysisService
             }
             $terpakai[$kunci] = true;
 
-            $normalized[] = $this->buatItem($title, $summary, $key, $problem);
+            $normalized[] = $this->buatItem($title, $summary, $key, $problem, $sumber);
 
-            if (count($normalized) >= 3) {
+            if ($key !== 'pihak' && count($normalized) >= 3) {
                 break;
             }
+
+            // Kategori pihak diurutkan setelah semua item terkumpul; batasi
+            // agar keluaran model yang berlebihan tidak diproses tanpa henti.
+            if ($key === 'pihak' && count($normalized) >= 12) {
+                break;
+            }
+        }
+
+        // Kategori pihak (departemen/personel) diurutkan menurut jumlah
+        // sebutan nyata lalu diambil tiga teratas, karena model bisa
+        // mengembalikan lebih dari tiga item tanpa urutan.
+        if ($key === 'pihak') {
+            usort($normalized, fn ($a, $b) => ($b['mention_count'] ?? 0) <=> ($a['mention_count'] ?? 0));
+            $normalized = array_slice($normalized, 0, 3);
         }
 
         return $normalized;
     }
 
-    private function buatItem(string $title, string $summary, string $key, array $problem): array
+    private function buatItem(string $title, string $summary, string $key, array $problem, ?Collection $sumber = null): array
     {
         $item = [
             'title' => mb_substr($title, 0, 160),
             'summary' => mb_substr($summary, 0, 600),
         ];
+
+        if ($key === 'pihak') {
+            // Jumlah sebutan dihitung dari teks komentar asli, bukan dari
+            // perkiraan model: setiap komentar yang memuat nama (atau salah
+            // satu alias penyebutannya) dihitung satu kali.
+            $alias = $problem['aliases'] ?? $problem['variants'] ?? $problem['sebutan_lain']
+                ?? $problem['sinonim'] ?? $problem['padanan'] ?? [];
+            $alias = $this->normalisasiAlias($alias);
+
+            $perkiraan = (int) (
+                $problem['evidence_count'] ?? $problem['mention_count'] ?? $problem['count']
+                ?? $problem['jumlah'] ?? $problem['frekuensi'] ?? 0
+            );
+            $hitung = $this->hitungSebutan($sumber, $title, $alias);
+
+            $item['mention_count'] = $hitung;
+            // true = angka berasal dari penghitungan komentar nyata.
+            $item['mention_verified'] = $hitung > 0;
+            $item['evidence_count'] = $hitung > 0 ? $hitung : max($perkiraan, 0);
+            // Alias disimpan supaya modal detail memakai pencocokan yang sama
+            // persis dengan penghitung sebutan (jumlahnya tidak pernah beda).
+            $item['aliases'] = $alias;
+
+            return $item;
+        }
 
         if ($key === 'answers') {
             $item['evidence_count'] = (int) (
@@ -668,6 +893,165 @@ class SatisfactionSurveyAiAnalysisService
         }
 
         return $item;
+    }
+
+    /**
+     * Rapikan daftar alias: hanya teks, tanpa duplikat, minimal 3 karakter
+     * supaya kata pendek seperti "HR" tidak mencocokkan komentar lain.
+     *
+     * Teks asli dipertahankan (bukan dihuruf-kecilkan) supaya bisa ditampilkan
+     * apa adanya di halaman; pencocokan tetap mengabaikan besar-kecil huruf.
+     */
+    private function normalisasiAlias($alias): array
+    {
+        if (is_string($alias)) {
+            $alias = preg_split('/[,;|]/', $alias) ?: [];
+        }
+
+        if (!is_array($alias)) {
+            return [];
+        }
+
+        $hasil = [];
+
+        foreach ($alias as $satu) {
+            if (is_array($satu)) {
+                continue;
+            }
+
+            $teks = trim($this->bersihkanTeks((string) $satu));
+
+            if (mb_strlen($teks) >= 3) {
+                $hasil[mb_strtolower($teks)] = $teks;
+            }
+        }
+
+        return array_values($hasil);
+    }
+
+    /**
+     * Hitung berapa komentar yang benar-benar menyebut sebuah nama.
+     *
+     * Satu komentar dihitung satu kali walau nama muncul berkali-kali di
+     * dalamnya, dan pencocokan tidak membedakan huruf besar/kecil. Alias
+     * (penyebutan lain dari pihak yang sama) ikut dicocokkan.
+     */
+    private function hitungSebutan(?Collection $sumber, string $nama, array $alias = []): int
+    {
+        if (!$sumber instanceof Collection || $sumber->isEmpty()) {
+            return 0;
+        }
+
+        return $this->komentarMenyebut($sumber, $nama, $alias)->count();
+    }
+
+    /**
+     * Daftar komentar yang menyebut sebuah nama atau aliasnya.
+     *
+     * Dipakai dua tempat: penghitung sebutan (hitungSebutan) dan modal detail
+     * komentar, sehingga angka yang tampil dan isi modal selalu sama.
+     */
+    public function komentarMenyebut(Collection $sumber, string $nama, array $alias = []): Collection
+    {
+        $kandidat = $this->kandidatSebutan($nama, $alias);
+
+        if ($kandidat === []) {
+            return $sumber->filter(fn () => false)->values();
+        }
+
+        return $sumber->filter(function ($komentar) use ($kandidat) {
+            $teks = mb_strtolower($this->teksKomentar($komentar));
+
+            foreach ($kandidat as $kata) {
+                if (mb_strpos($teks, $kata) !== false) {
+                    return true;
+                }
+            }
+
+            return false;
+        })->values();
+    }
+
+    /**
+     * Kata kunci pencocokan: nama itu sendiri plus alias yang panjangnya
+     * minimal tiga huruf (agar singkatan pendek tidak salah cocok).
+     */
+    private function kandidatSebutan(string $nama, array $alias = []): array
+    {
+        $kandidat = [];
+
+        foreach (array_merge([$nama], $alias) as $satu) {
+            $teks = mb_strtolower(trim($this->bersihkanTeks((string) $satu)));
+
+            if (mb_strlen($teks) >= 3) {
+                $kandidat[$teks] = $teks;
+            }
+        }
+
+        return $kandidat;
+    }
+
+    /**
+     * Komentar yang memuat kata kunci judul — untuk panel masalah dan
+     * permintaan yang judulnya disusun AI (perkiraan, bukan kutipan pasti).
+     */
+    public function komentarMemuatKataKunci(Collection $sumber, string $judul): Collection
+    {
+        $kata = $this->kataKunci($judul);
+
+        if ($kata === []) {
+            return $sumber->filter(fn () => false)->values();
+        }
+
+        return $sumber->filter(function ($komentar) use ($kata) {
+            $teks = mb_strtolower($this->teksKomentar($komentar));
+
+            foreach ($kata as $satu) {
+                if (mb_strpos($teks, $satu) !== false) {
+                    return true;
+                }
+            }
+
+            return false;
+        })->values();
+    }
+
+    /**
+     * Kata bermakna dari sebuah judul: minimal empat huruf dan bukan kata
+     * umum, supaya pencocokan tidak menyambar hampir semua komentar.
+     */
+    private function kataKunci(string $judul): array
+    {
+        $umum = [
+            'yang', 'untuk', 'dengan', 'pada', 'dari', 'dalam', 'tidak', 'kurang',
+            'sering', 'perlu', 'harus', 'agar', 'oleh', 'lebih', 'banyak', 'adalah',
+            'dan', 'atau', 'para', 'serta', 'kepada', 'terhadap', 'sangat', 'masih',
+            'belum', 'sudah', 'setiap', 'semua', 'satu', 'dua', 'tiga', 'masalah',
+            'karyawan', 'perusahaan',
+        ];
+
+        $kata = [];
+
+        foreach (preg_split('/[^a-z0-9]+/u', mb_strtolower($this->bersihkanTeks($judul))) ?: [] as $satu) {
+            if (mb_strlen($satu) >= 4 && !in_array($satu, $umum, true)) {
+                $kata[$satu] = $satu;
+            }
+        }
+
+        return array_values($kata);
+    }
+
+    /**
+     * Ambil teks komentar dari item koleksi: boleh berupa string biasa
+     * (hasil pluck) atau array berisi kunci isi (hasil komentarEsaiDetail).
+     */
+    private function teksKomentar($komentar): string
+    {
+        if (is_array($komentar)) {
+            return (string) ($komentar['isi'] ?? '');
+        }
+
+        return (string) $komentar;
     }
 
     /**

@@ -99,6 +99,73 @@
             font-size: .68rem;
             font-weight: 700;
         }
+        /* Angka sebutan bisa diklik: buka modal detail komentar. */
+        .ai-metric-klik {
+            border: 1px dashed #b7c6f0;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background .15s ease, color .15s ease, border-color .15s ease;
+        }
+        .ai-metric-klik:hover,
+        .ai-metric-klik:focus {
+            background: #4e73df;
+            border-color: #4e73df;
+            color: #fff;
+            outline: none;
+        }
+        .ai-metric-klik::after { content: ' \f06e'; font-family: 'Font Awesome 5 Free'; font-weight: 900; margin-left: 4px; opacity: .8; }
+        .ai-metric-warn { background: #fff4e5; color: #a15c00; }
+        .ai-metric-alias { background: #f1f2f6; color: #6b7280; font-weight: 600; }
+        .ai-total {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            margin-top: 10px;
+            padding: 6px 10px;
+            border: 1px dashed #b7c6f0;
+            border-radius: 9px;
+            background: #f6f9ff;
+            color: #3d5ab8;
+            font-size: .72rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .ai-total:hover,
+        .ai-total:focus { background: #4e73df; border-color: #4e73df; color: #fff; outline: none; }
+        .ai-total strong { font-weight: 800; }
+        .ai-komentar-grup { margin-bottom: 14px; }
+        .ai-komentar-grup:last-child { margin-bottom: 0; }
+        .ai-komentar-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 9px;
+            background: #eef4ff;
+            color: #2f3a56;
+            font-size: .8rem;
+            font-weight: 700;
+        }
+        .ai-komentar-head .badge { font-size: .68rem; }
+        .ai-komentar-item {
+            padding: 8px 10px;
+            margin-top: 6px;
+            border: 1px solid #e3e6f0;
+            border-left: 3px solid #4e73df;
+            border-radius: 8px;
+            background: #fff;
+            font-size: .78rem;
+            color: #3f4756;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .ai-komentar-waktu { display: block; margin-top: 4px; font-size: .68rem; color: #9aa0ac; }
+        .ai-komentar-kosong { padding: 12px; border: 1px dashed #e3e6f0; border-radius: 9px; background: #fbfcff; font-size: .8rem; color: #6b7280; }
+        .ai-komentar-catatan { margin-top: 10px; font-size: .72rem; color: #858796; }
         .ai-item-empty { color: #858796; font-size: .78rem; display: block; }
         .ai-foot {
             display: flex;
@@ -179,9 +246,23 @@
                         $answerProblems = $analysisPayload['answers'] ?? $analysisPayload['problems'] ?? [];
                         $scoreProblems = $analysisPayload['scores'] ?? [];
                         $topRequests = $analysisPayload['requests'] ?? [];
+                        $topDepartments = $analysisPayload['departments'] ?? [];
+                        $topPersons = $analysisPayload['persons'] ?? [];
+
+                        // Angka sebutan bisa diklik: modal mengambil rincian
+                        // komentar dari endpoint ini (dihitung dari komentar asli).
+                        $aiKomentarUrl = route('satisfaction-survey.admin.analysis-comments');
+                        $aiJumlahSebutan = fn (array $items) => array_sum(array_map(
+                            fn ($item) => (int) ($item['evidence_count'] ?? 0),
+                            $items
+                        ));
+                        $aiTotalEsai = $aiJumlahSebutan($answerProblems);
+                        $aiTotalPermintaan = $aiJumlahSebutan($topRequests);
+                        $aiTotalDepartemen = $aiJumlahSebutan($topDepartments);
+                        $aiTotalPersonel = $aiJumlahSebutan($topPersons);
                     @endphp
 
-                    @if($aiAnalysis && (count($answerProblems) || count($scoreProblems) || count($topRequests)))
+                    @if($aiAnalysis && (count($answerProblems) || count($scoreProblems) || count($topRequests) || count($topDepartments) || count($topPersons)))
                         <div class="row">
                             <div class="col-lg-4 mb-3 mb-lg-0">
                                 <div class="ai-panel">
@@ -200,12 +281,21 @@
                                                     <div class="ai-item-title">{{ $problem['title'] ?? 'Masalah' }}</div>
                                                     <div class="ai-item-text">{{ $problem['summary'] ?? '' }}</div>
                                                     @if(isset($problem['evidence_count']))
-                                                        <span class="ai-metric">{{ (int) $problem['evidence_count'] }} sebutan</span>
+                                                        <button type="button" class="ai-metric ai-metric-klik"
+                                                                data-kategori="answers"
+                                                                data-index="{{ $loop->index }}"
+                                                                data-judul="{{ $problem['title'] ?? '' }}"
+                                                                title="Klik untuk melihat komentar yang memuat kata kunci ini">{{ (int) $problem['evidence_count'] }} sebutan</button>
                                                     @endif
                                                 </div>
                                             </li>
                                         @endforeach
                                     </ol>
+                                    @if(count($answerProblems))
+                                        <button type="button" class="ai-total" data-kategori="answers" data-index="total" data-judul="Dari Jawaban Esai">
+                                            <i class="fas fa-list-ul"></i> Total <strong>{{ $aiTotalEsai }} sebutan</strong> &middot; klik detail komentar
+                                        </button>
+                                    @endif
                                 </div>
                             </div>
                             <div class="col-lg-4 mb-3 mb-lg-0">
@@ -225,7 +315,11 @@
                                                     <div class="ai-item-title">{{ $req['title'] ?? 'Permintaan' }}</div>
                                                     <div class="ai-item-text">{{ $req['summary'] ?? '' }}</div>
                                                     @if(isset($req['evidence_count']))
-                                                        <span class="ai-metric">{{ (int) $req['evidence_count'] }} sebutan</span>
+                                                        <button type="button" class="ai-metric ai-metric-klik"
+                                                                data-kategori="requests"
+                                                                data-index="{{ $loop->index }}"
+                                                                data-judul="{{ $req['title'] ?? '' }}"
+                                                                title="Klik untuk melihat komentar yang memuat kata kunci ini">{{ (int) $req['evidence_count'] }} sebutan</button>
                                                     @endif
                                                 </div>
                                             </li>
@@ -233,6 +327,11 @@
                                             <li class="ai-item ai-item-empty">Belum ada data permintaan. Klik Perbarui Analisis.</li>
                                         @endforelse
                                     </ol>
+                                    @if(count($topRequests))
+                                        <button type="button" class="ai-total" data-kategori="requests" data-index="total" data-judul="Top 3 Permintaan Karyawan">
+                                            <i class="fas fa-list-ul"></i> Total <strong>{{ $aiTotalPermintaan }} sebutan</strong> &middot; klik detail komentar
+                                        </button>
+                                    @endif
                                 </div>
                             </div>
                             <div class="col-lg-4">
@@ -268,10 +367,97 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="row mt-3">
+                            <div class="col-lg-6 mb-3 mb-lg-0">
+                                <div class="ai-panel">
+                                    <div class="ai-panel-head">
+                                        <span class="ai-panel-icon"><i class="fas fa-building"></i></span>
+                                        <div>
+                                            <div class="ai-panel-title">Top 3 Departemen Paling Banyak Dikomentari</div>
+                                            <div class="ai-panel-sub">jumlah komentar yang menyebut departemen</div>
+                                        </div>
+                                    </div>
+                                    <ol class="ai-list">
+                                        @forelse($topDepartments as $dept)
+                                            <li class="ai-item">
+                                                <span class="ai-rank">{{ $loop->iteration }}</span>
+                                                <div>
+                                                    <div class="ai-item-title">{{ $dept['title'] ?? 'Departemen' }}</div>
+                                                    <div class="ai-item-text">{{ $dept['summary'] ?? '' }}</div>
+                                                    @if(isset($dept['evidence_count']))
+                                                        <button type="button" class="ai-metric ai-metric-klik"
+                                                                data-kategori="departments"
+                                                                data-index="{{ $loop->index }}"
+                                                                data-judul="{{ $dept['title'] ?? '' }}"
+                                                                title="Klik untuk melihat komentar yang menyebut departemen ini">{{ (int) $dept['evidence_count'] }} komentar</button>
+                                                        @unless($dept['mention_verified'] ?? false)
+                                                            <span class="ai-metric ai-metric-warn">perkiraan AI, sebutan tidak terdeteksi otomatis</span>
+                                                        @endunless
+                                                    @endif
+                                                    @if(!empty($dept['aliases']))
+                                                        <span class="ai-metric ai-metric-alias">juga disebut: {{ implode(', ', $dept['aliases']) }}</span>
+                                                    @endif
+                                                </div>
+                                            </li>
+                                        @empty
+                                            <li class="ai-item ai-item-empty">Belum ada komentar yang menyebut departemen. Klik Perbarui Analisis.</li>
+                                        @endforelse
+                                    </ol>
+                                    @if(count($topDepartments))
+                                        <button type="button" class="ai-total" data-kategori="departments" data-index="total" data-judul="Top 3 Departemen Paling Banyak Dikomentari">
+                                            <i class="fas fa-list-ul"></i> Total <strong>{{ $aiTotalDepartemen }} komentar</strong> &middot; klik detail komentar
+                                        </button>
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="ai-panel">
+                                    <div class="ai-panel-head">
+                                        <span class="ai-panel-icon"><i class="fas fa-user-tie"></i></span>
+                                        <div>
+                                            <div class="ai-panel-title">Top 3 Personel Paling Banyak Dikomentari</div>
+                                            <div class="ai-panel-sub">jumlah komentar yang menyebut nama/jabatan</div>
+                                        </div>
+                                    </div>
+                                    <ol class="ai-list">
+                                        @forelse($topPersons as $orang)
+                                            <li class="ai-item">
+                                                <span class="ai-rank">{{ $loop->iteration }}</span>
+                                                <div>
+                                                    <div class="ai-item-title">{{ $orang['title'] ?? 'Personel' }}</div>
+                                                    <div class="ai-item-text">{{ $orang['summary'] ?? '' }}</div>
+                                                    @if(isset($orang['evidence_count']))
+                                                        <button type="button" class="ai-metric ai-metric-klik"
+                                                                data-kategori="persons"
+                                                                data-index="{{ $loop->index }}"
+                                                                data-judul="{{ $orang['title'] ?? '' }}"
+                                                                title="Klik untuk melihat komentar yang menyebut personel ini">{{ (int) $orang['evidence_count'] }} komentar</button>
+                                                        @unless($orang['mention_verified'] ?? false)
+                                                            <span class="ai-metric ai-metric-warn">perkiraan AI, sebutan tidak terdeteksi otomatis</span>
+                                                        @endunless
+                                                    @endif
+                                                    @if(!empty($orang['aliases']))
+                                                        <span class="ai-metric ai-metric-alias">juga disebut: {{ implode(', ', $orang['aliases']) }}</span>
+                                                    @endif
+                                                </div>
+                                            </li>
+                                        @empty
+                                            <li class="ai-item ai-item-empty">Belum ada komentar yang menyebut personel. Klik Perbarui Analisis.</li>
+                                        @endforelse
+                                    </ol>
+                                    @if(count($topPersons))
+                                        <button type="button" class="ai-total" data-kategori="persons" data-index="total" data-judul="Top 3 Personel Paling Banyak Dikomentari">
+                                            <i class="fas fa-list-ul"></i> Total <strong>{{ $aiTotalPersonel }} komentar</strong> &middot; klik detail komentar
+                                        </button>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
                         <div class="ai-foot">
                             <span><i class="fas fa-robot mr-1"></i>{{ $aiAnalysis->model ?? 'router9' }}</span>
                             <span>{{ $aiAnalysis->source_count }} jawaban esai</span>
                             <span>Dibuat {{ optional($aiAnalysis->generated_at)->format('d M Y H:i') }}</span>
+                            <span><i class="fas fa-mouse-pointer mr-1"></i>Klik angka sebutan/komentar untuk melihat komentar aslinya</span>
                         </div>
                     @else
                         <div class="ai-empty">
@@ -594,6 +780,32 @@
                 </div>
             </div>
             @endif
+
+            <!-- Modal Detail Komentar di balik Angka Sebutan AI Analysis -->
+            <div class="modal fade" id="aiKomentarModal" tabindex="-1" role="dialog" aria-labelledby="aiKomentarModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <div>
+                                <h5 class="modal-title font-weight-bold mb-1" id="aiKomentarModalLabel">
+                                    <i class="fas fa-comments mr-2"></i><span id="aiKomentarJudul">Detail Komentar</span>
+                                </h5>
+                                <div class="small" style="opacity:0.9;" id="aiKomentarSub">-</div>
+                            </div>
+                            <button type="button" class="close text-white" data-dismiss="modal" aria-label="Tutup" style="opacity:0.9;">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body" id="aiKomentarBody">
+                            <div class="ai-komentar-kosong">Memuat komentar...</div>
+                        </div>
+                        <div class="modal-footer bg-white d-flex justify-content-between align-items-center">
+                            <span class="small text-muted font-weight-bold" id="aiKomentarRingkas">-</span>
+                            <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Tutup</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -903,6 +1115,146 @@ $(function(){
 })();
 </script>
 @endif
+<script>
+// Angka sebutan/komentar pada panel AI Analysis bisa diklik: modal menampilkan
+// komentar esai yang benar-benar cocok, diambil dari endpoint detail komentar.
+(function () {
+  var ENDPOINT = @json($aiKomentarUrl, JSON_UNESCAPED_SLASHES);
+  var modalEl = document.getElementById('aiKomentarModal');
+
+  if (!modalEl || !ENDPOINT) {
+    return;
+  }
+
+  var bodyEl = document.getElementById('aiKomentarBody');
+  var judulEl = document.getElementById('aiKomentarJudul');
+  var subEl = document.getElementById('aiKomentarSub');
+  var ringkasEl = document.getElementById('aiKomentarRingkas');
+
+  function perlihatkan() {
+    if (window.jQuery && typeof window.jQuery('#aiKomentarModal').modal === 'function') {
+      window.jQuery('#aiKomentarModal').modal('show');
+    } else if (modalEl.classList) {
+      modalEl.classList.add('show');
+      modalEl.style.display = 'block';
+      modalEl.removeAttribute('aria-hidden');
+    }
+  }
+
+  function el(tag, className, teks) {
+    var node = document.createElement(tag);
+    if (className) { node.className = className; }
+    if (teks !== undefined && teks !== null) { node.textContent = teks; }
+    return node;
+  }
+
+  function renderGrup(grup) {
+    var wrap = el('div', 'ai-komentar-grup');
+    var head = el('div', 'ai-komentar-head');
+    head.appendChild(el('span', null, grup.judul || 'Tanpa judul'));
+    head.appendChild(el('span', 'badge badge-primary', grup.jumlah + ' komentar'));
+    wrap.appendChild(head);
+
+    var daftar = grup.komentar || [];
+
+    if (!daftar.length) {
+      wrap.appendChild(el('div', 'ai-komentar-kosong', 'Tidak ada komentar yang cocok untuk item ini.'));
+      return wrap;
+    }
+
+    daftar.forEach(function (komentar) {
+      var item = el('div', 'ai-komentar-item', komentar.isi);
+      if (komentar.waktu) {
+        item.appendChild(el('span', 'ai-komentar-waktu', komentar.waktu));
+      }
+      wrap.appendChild(item);
+    });
+
+    if (grup.jumlah > daftar.length) {
+      wrap.appendChild(el('div', 'ai-komentar-catatan', 'Ditampilkan ' + daftar.length + ' dari ' + grup.jumlah + ' komentar.'));
+    }
+
+    return wrap;
+  }
+
+  function render(data, judulDiklik) {
+    judulEl.textContent = data.label || 'Detail Komentar';
+
+    var sub = ['Total ' + data.total + ' komentar cocok dari ' + data.total_semua_komentar + ' komentar esai'];
+    if (data.judul || judulDiklik) {
+      sub.unshift('Item: ' + (data.judul || judulDiklik));
+    }
+    subEl.textContent = sub.join(' | ');
+
+    bodyEl.innerHTML = '';
+    var grup = data.grup || [];
+
+    if (!grup.length) {
+      bodyEl.appendChild(el('div', 'ai-komentar-kosong', data.catatan || 'Tidak ada komentar untuk ditampilkan.'));
+    } else {
+      grup.forEach(function (satu) { bodyEl.appendChild(renderGrup(satu)); });
+      if (data.catatan) {
+        bodyEl.appendChild(el('div', 'ai-komentar-catatan', data.catatan));
+      }
+    }
+
+    ringkasEl.textContent = 'Total ' + data.total + ' komentar dari ' + data.total_semua_komentar + ' komentar esai';
+  }
+
+  function gagal(pesan) {
+    bodyEl.innerHTML = '';
+    bodyEl.appendChild(el('div', 'ai-komentar-kosong', pesan || 'Gagal memuat detail komentar.'));
+  }
+
+  function muat(kategori, index, judul) {
+    judulEl.textContent = 'Detail Komentar';
+    subEl.textContent = judul ? 'Item: ' + judul : 'Memuat...';
+    ringkasEl.textContent = '-';
+    bodyEl.innerHTML = '';
+    bodyEl.appendChild(el('div', 'ai-komentar-kosong', 'Memuat komentar...'));
+    perlihatkan();
+
+    var url = ENDPOINT + '?kategori=' + encodeURIComponent(kategori) + '&index=' + encodeURIComponent(index);
+
+    if (!window.fetch) {
+      gagal('Browser ini tidak mendukung permintaan data. Gunakan browser terbaru.');
+      return;
+    }
+
+    fetch(url, {
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin'
+    })
+      .then(function (respon) {
+        return respon.json().then(function (json) { return { ok: respon.ok, json: json }; });
+      })
+      .then(function (hasil) {
+        if (!hasil.ok || !hasil.json || hasil.json.ok !== true) {
+          gagal(hasil.json && hasil.json.message ? hasil.json.message : 'Gagal memuat detail komentar.');
+          return;
+        }
+        render(hasil.json, judul);
+      })
+      .catch(function () {
+        gagal('Gagal memuat detail komentar. Periksa koneksi lalu coba lagi.');
+      });
+  }
+
+  document.addEventListener('click', function (event) {
+    if (!event.target || !event.target.closest) { return; }
+
+    var tombol = event.target.closest('.ai-metric-klik, .ai-total');
+    if (!tombol) { return; }
+
+    event.preventDefault();
+    muat(
+      tombol.getAttribute('data-kategori'),
+      tombol.getAttribute('data-index'),
+      tombol.getAttribute('data-judul')
+    );
+  });
+})();
+</script>
 @php
     $aiFlashSuccess = session('ai_analysis_success');
     $aiFlashError = isset($errors) && $errors->has('ai_analysis') ? $errors->first('ai_analysis') : null;
