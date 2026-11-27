@@ -284,6 +284,7 @@ Route::group(['middleware' => 'auth'], function () {
     Route::get('/pelamar/index', [PelamarController::class, 'index'])->name('pelamar.index')->middleware(['auth', 'permission']);
     Route::post('/pelamar/import', [PelamarController::class, 'import'])->name('pelamar.import')->middleware(['auth', 'permission']);
     Route::post('/pelamar/assign', [PelamarController::class, 'assign'])->name('pelamar.assign')->middleware(['auth', 'permission']);
+    Route::get('/pelamar/next-npk', [PelamarController::class, 'nextNpk'])->name('pelamar.next-npk')->middleware(['auth', 'permission']);
     Route::get('/pelamar/detail/{id}', [PelamarController::class, 'detail'])->name('pelamar.detail')->middleware(['auth', 'permission']);
     Route::get('/pelamar/template', [PelamarController::class, 'exportTemplate'])->name('pelamar.template')->middleware(['auth', 'permission']);
 
@@ -369,6 +370,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     Route::get('/payroll-process/generate', [PayrollProcessController::class, 'generate'])->name('payroll-process.generate')->middleware(['auth', 'permission']);
     Route::get('/payroll-process/check/{period_id}', [PayrollProcessController::class, 'checkPayroll'])->name('payroll-process.check')->middleware(['auth', 'permission']);
+    Route::get('/payroll-process/check-progress/{period_id}', [PayrollProcessController::class, 'checkProgress'])->name('payroll-process.check-progress')->middleware(['auth']);
     Route::get('/payroll-process/generatev2', [PayrollProcessController::class, 'generateV2'])->name('payroll-process.generatev2');
     Route::get('/payroll-process/checkv2/{period_id}', [PayrollProcessController::class, 'checkPayrollV2'])->name('payroll-process.checkv2');
     Route::post('/payroll-process/process', [PayrollProcessController::class, 'process'])->name('payroll-process.process')->middleware(['auth', 'permission']);
@@ -1847,6 +1849,7 @@ Route::middleware(['auth', 'permission'])->prefix('satisfaction-survey/admin')->
     Route::post('/{id}/toggle', [SatisfactionSurveyController::class, 'adminToggle'])->name('toggle');
     Route::get('/results', [SatisfactionSurveyController::class, 'adminResults'])->name('results');
     Route::post('/results/analyze', [SatisfactionSurveyController::class, 'analyzeSurvey'])->name('results.analyze');
+    Route::get('/analysis-comments', [SatisfactionSurveyController::class, 'adminAnalysisComments'])->name('analysis-comments');
     Route::get('/export', [SatisfactionSurveyController::class, 'adminExport'])->name('export');
     Route::get('/export-likert', [SatisfactionSurveyController::class, 'adminExportLikert'])->name('export-likert');
     Route::get('/export-likert-pdf', [SatisfactionSurveyController::class, 'adminExportLikertPdf'])->name('export-likert-pdf');
